@@ -1,0 +1,2 @@
+Telethon>=1.45,<2
+aiohttp>=3.11,<4
