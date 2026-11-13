@@ -12,6 +12,13 @@ export async function POST(req:NextRequest){
  if(!chatId||!allowedChats().has(chatId))return reply({error:"허용되지 않은 그룹"},403);
  try{
   const db=await bridgeDatabase();
+  if(type==="heartbeat"){
+   const accountId=safeAccountId(body.accountId);
+   if(!accountId)return reply({error:"계정 ID 오류"},400);
+   await db.query(`INSERT INTO moment_telegram_heartbeats(account_id,chat_id,last_seen)
+     VALUES($1,$2,now()) ON CONFLICT (account_id,chat_id) DO UPDATE SET last_seen=now()`,[accountId,chatId]);
+   return reply({ok:true});
+  }
   if(type==="message"){
    const text=typeof body.text==="string"?body.text.trim().slice(0,1500):"";
    const messageId=Number(body.messageId);
