@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
 import AccountPersonaEditor from "./account-persona-editor";
-import {Activity,ArrowLeft,ArrowRight,BrainCircuit,Check,ChevronRight,CircleHelp,ClipboardList,FileText,LayoutDashboard,MessageCircle,Plus,Save,Settings2,ShieldCheck,Trash2,Users,UserRound,WifiOff,X} from "lucide-react";
+import {Activity,ArrowRight,BrainCircuit,Check,ChevronRight,CircleHelp,LayoutDashboard,MessageCircle,Plus,Trash2,Users,UserRound,WifiOff,X} from "lucide-react";
 
 type Account={id:string;name:string;note:string;enabled:boolean};
 type Group={id:string;name:string};
@@ -40,7 +40,7 @@ const [messages,setMessages]=useState<Message[]>([]);
 const [accountName,setAccountName]=useState(""),[groupName,setGroupName]=useState(""),[groupCode,setGroupCode]=useState("");
 const [accountId,setAccountId]=useState(""),[groupId,setGroupId]=useState("demo-private"),[personaId,setPersonaId]=useState("p3"),[mode,setMode]=useState<Assignment["mode"]>("member");
 const [search,setSearch]=useState("");
-const [editing,setEditing]=useState<Persona|null>(null),[description,setDescription]=useState("");
+
 const [message,setMessage]=useState(""),[topic,setTopic]=useState("오늘 삼성전자에 대해 어떤 점을 확인해야 할까요?");
 const [notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[lastMode,setLastMode]=useState("none");
 useEffect(()=>{setAccounts(restore("ace.accounts",[]));setGroups(restore("ace.groups",[{id:"demo-private",name:"비공개 테스트 그룹"}]));setPersonas(restore("ace.people",defaults));setAssignments(restore("ace.assignments",[]));setMessages(restore("ace.messages",[]));setGroupId(restore("ace.activeGroup","demo-private"));setReady(true)},[]);
@@ -52,8 +52,6 @@ const assigned=assignments.find(a=>a.accountId===accountId&&a.groupId===groupId)
 function go(p:Page){setPage(p);setNotice("");}
 function addAccount(){const name=accountName.trim();if(!name)return;if(accounts.some(a=>a.id===name)){setNotice("같은 이름의 테스트 계정이 이미 있습니다.");return;}setAccounts(old=>[...old,{id:name,name,note:"로컬 테스트 계정",enabled:true}]);setAccountId(name);setAccountName("");setNotice("테스트 계정을 등록했습니다. 실제 텔레그램 계정과 연결되지는 않습니다.");}
 function addGroup(){const name=groupName.trim(),id=groupCode.trim()||"local-"+nid();if(!name)return;if(groups.some(x=>x.id===id)){setNotice("이미 존재하는 그룹 ID입니다.");return;}setGroups(old=>[...old,{id,name}]);setGroupId(id);setGroupName("");setGroupCode("");setNotice("테스트 그룹을 추가했습니다.");}
-function startPersona(){setDescription("");setEditing({id:nid(),name:"",role:templates[0].role,style:templates[0].style,risk:templates[0].risk});}
-function savePersona(){if(!editing?.name.trim())return;const p={...editing,name:editing.name.trim()};setPersonas(old=>old.some(x=>x.id===p.id)?old.map(x=>x.id===p.id?p:x):[...old,p]);setPersonaId(p.id);setEditing(null);setNotice("페르소나를 저장했습니다. 계정에 사용하려면 '페르소나 배정'에서 적용하세요.");}
 function apply(){if(!accountId||!groupId||!personaId){setNotice("계정, 그룹, 페르소나를 모두 선택하세요.");return;}setAssignments(old=>[...old.filter(a=>!(a.accountId===accountId&&a.groupId===groupId)),{accountId,groupId,personaId,mode}]);setNotice("적용 완료: "+accountId+" → "+groups.find(x=>x.id===groupId)?.name+" → "+personas.find(x=>x.id===personaId)?.name);}
 async function simulate(){if(busy||groupPeople.length<2)return;setBusy(true);setNotice("대화를 생성하는 중입니다.");try{
  const response=await fetch("/api/discussion",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({groupId,topic:message.trim()||topic,humanMessage:message.trim(),personas:groupPeople,history:history.slice(-16)})});
@@ -79,6 +77,6 @@ return <div className="nxApp">
  {page==="status"&&<div className="nxPanel"><div className="nxPanelHeading"><div><h2>서비스 구현 상태</h2><p>현재 실제 동작하는 부분과 아직 미구현인 기능을 구분합니다.</p></div></div><div className="nxStatusList">{[["테스트 계정·그룹 관리","사용 가능",true],["계정별 페르소나 설정·배정","사용 가능",true],["AI 토론 생성 API","API 설정 시 사용 가능",true],["브라우저 대화 기록","사용 가능",true],["텔레그램 일반 계정 로그인","미구현",false],["텔레그램 그룹 메시지 자동 수신·전송","미구현",false],["서버 기반 공동 기억과 상시 워커","미구현",false],["실시간 시세·성과 검증","미구현",false]].map(([label,status,ok])=><div key={String(label)}><span>{ok?<Check size={18}/>:<CircleHelp size={18}/>}</span><strong>{label}</strong><small>{status}</small></div>)}</div></div>}
  {notice&&<div className="nxNotice" role="status">{notice}<button onClick={()=>setNotice("")}><X size={15}/></button></div>}
  </div></main>
- {editing&&<div className="nxOverlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEditing(null)}}><div className="nxModal" role="dialog" aria-modal="true" aria-label="페르소나 설정"><div className="nxModalTop"><div><small>AI 성격 설계</small><h2>{editing.name?"페르소나 수정":"새 페르소나 만들기"}</h2></div><button onClick={()=>setEditing(null)}><X size={20}/></button></div><div className="nxModalScroll"><div className="nxModalHint">1. 원하는 유형을 고르세요. 프롬프트를 직접 작성하지 않아도 됩니다.</div><div className="nxTemplates">{templates.map(t=><button key={t.title} onClick={()=>{setEditing({...editing,role:t.role,style:t.style,risk:t.risk});setDescription("")}}>{t.title}</button>)}</div><div className="nxModalColumns"><label>페르소나 이름<input value={editing.name} maxLength={60} onChange={e=>setEditing({...editing,name:e.target.value})} placeholder="예: 박과장"/></label><label>역할<input value={editing.role} maxLength={120} onChange={e=>setEditing({...editing,role:e.target.value})}/></label></div><div className="nxModalHint">2. 추가 성격을 쉬운 말로 적어주세요.</div><label>성격 설명<textarea rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder="예: 50대 직장인이고 말을 적게 해. 전문가 말은 잘 듣지만 궁금한 건 짧게 물어봐."/></label><button className="nxSubButton nxWide" disabled={!description.trim()} onClick={()=>setEditing({...editing,style:description.trim()+" 상황에 맞을 때만 반응하고 같은 말을 반복하지 않는다. 사실이 아닌 매매나 수익을 주장하지 않는다."})}>설명을 행동 지침으로 변환</button><div className="nxModalHint">3. 실제 적용될 말투를 확인하세요.</div><label>행동 지침<textarea rows={5} maxLength={1500} value={editing.style} onChange={e=>setEditing({...editing,style:e.target.value})}/></label><label>투자 성향 · {editing.risk}/100<input type="range" min="0" max="100" value={editing.risk} onChange={e=>setEditing({...editing,risk:Number(e.target.value)})}/></label></div><div className="nxModalFooter"><small>저장 후 페르소나 배정 메뉴에서 계정에 적용하세요.</small><button onClick={()=>setEditing(null)}>취소</button><button className="nxPrimary" disabled={!editing.name.trim()} onClick={savePersona}><Save size={16}/> 저장</button></div></div></div>}
+
  </div>
 }
