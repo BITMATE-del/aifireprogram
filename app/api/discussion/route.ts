@@ -22,7 +22,7 @@ export async function POST(req:NextRequest){
   if(JSON.stringify(input).length>30000)return NextResponse.json({error:"요청 용량이 너무 큽니다."},{status:413});
   const topic=str(input?.topic,1200),human=str(input?.humanMessage,1200),people=personasOf(input?.personas);
   const history=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
-  if(!topic||people.length<2)return NextResponse.json({error:"토론 주제와 발언 가능한 AI 페르소나 2명 이상이 필요합니다."},{status:400});
+  if(!topic||people.length<1)return NextResponse.json({error:"토론 주제와 발언 가능한 AI 페르소나 1명 이상이 필요합니다."},{status:400});
   const key=process.env.OPENAI_API_KEY;
   if(!key)return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});
   const description=[
