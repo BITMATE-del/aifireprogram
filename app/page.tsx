@@ -26,6 +26,8 @@ export default function Home(){
  const [activeGroup,setActiveGroup]=useState("demo-private");
  const [topic,setTopic]=useState("오늘 삼성전자 흐름과 다음 거래일에 확인할 변수");
  const [busy,setBusy]=useState(false);
+ const [assignments,setAssignments]=useState<Assignment[]>([]);
+ const [humanMessage,setHumanMessage]=useState("");
 
  const [notice,setNotice]=useState("실제 텔레그램 전송은 비활성화되어 있습니다. 비공개 시뮬레이션 환경입니다.");
  const [editing,setEditing]=useState<Persona|null>(null);
