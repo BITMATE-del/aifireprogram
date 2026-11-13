@@ -12,6 +12,7 @@ export default function GroupLiveInbox({groupId,people,assignments}:{
 }){
  const [inbox,setInbox]=useState<InboxMessage[]>([]);
  const [outbox,setOutbox]=useState<Outgoing[]>([]);
+ const [workers,setWorkers]=useState<{account_id:string;online:boolean;last_seen:string}[]>([]);
  const [selected,setSelected]=useState("");
  const [connected,setConnected]=useState(false);
  const [loading,setLoading]=useState(false),[generating,setGenerating]=useState(false),[approving,setApproving]=useState(false);
@@ -24,13 +25,13 @@ export default function GroupLiveInbox({groupId,people,assignments}:{
  }),[groupId,assignments,people]);
  const current=inbox.find(m=>String(m.id)===selected);
  const refresh=useCallback(async()=>{
-  if(!/^-?\d+$/.test(groupId)){setConnected(false);setInbox([]);setOutbox([]);setNotice("실제 Telegram 숫자형 그룹 ID를 등록해야 메시지를 조회할 수 있습니다.");return;}
+  if(!/^-?\d+$/.test(groupId)){setConnected(false);setInbox([]);setOutbox([]);setWorkers([]);setNotice("실제 Telegram 숫자형 그룹 ID를 등록해야 메시지를 조회할 수 있습니다.");return;}
   setLoading(true);
   try{
    const response=await fetch("/api/group-inbox?chatId="+encodeURIComponent(groupId),{cache:"no-store"});
    const data=await response.json();
    if(!response.ok)throw Error(data.error||"조회 오류");
-   setConnected(Boolean(data.connected));setInbox(Array.isArray(data.messages)?data.messages:[]);setOutbox(Array.isArray(data.drafts)?data.drafts:[]);
+   setConnected(Boolean(data.connected));setInbox(Array.isArray(data.messages)?data.messages:[]);setOutbox(Array.isArray(data.drafts)?data.drafts:[]);setWorkers(Array.isArray(data.workers)?data.workers:[]);
    if(!data.connected)setNotice(data.error||"그룹 연결 정보를 확인하세요.");
   }catch(e){setConnected(false);setNotice(e instanceof Error?e.message:"메시지함 조회 실패");}
   finally{setLoading(false);}
@@ -72,7 +73,7 @@ export default function GroupLiveInbox({groupId,people,assignments}:{
  }
  return <section className="nxPanel nxUnderPanel">
   <div className="nxPanelHeading"><div><h2>그룹 실시간 메시지함</h2><p>사람이 작성한 원본 메시지를 보고, AI 반응을 검토한 뒤 승인합니다.</p></div><button onClick={()=>void refresh()} disabled={loading}><RefreshCw size={15}/>{loading?"확인 중":"새로고침"}</button></div>
-  <div className="nxLiveState">{connected?<span className="nxLiveReady"><Check size={14}/> 수신 저장소 준비됨</span>:<span><WifiOff size={14}/> 그룹 연결 미설정</span>}<small>수신 저장소 준비 여부가 텔레그램 계정 연결을 보장하지는 않습니다.</small></div>
+  <div className="nxLiveState">{connected?<span className="nxLiveReady"><Check size={14}/> 수신 저장소 준비됨</span>:<span><WifiOff size={14}/> 그룹 연결 미설정</span>}<small>실제 연결된 계정: {workers.filter(w=>w.online).length}개 {workers.filter(w=>w.online).map(w=>w.account_id).join(", ")||"· 연결 대기"}</small></div>
   <div className="nxLiveGrid">
    <div className="nxLiveList"><h3>실제 그룹 수신 메시지 <small>{inbox.length}개</small></h3>
     {inbox.length?inbox.map(m=><button className={"nxLiveItem "+(selected===String(m.id)?"selected":"")} key={m.id} onClick={()=>{setSelected(String(m.id));setDrafts([]);setDraftMode("");}}>
