@@ -4,6 +4,7 @@ export async function middleware(req:NextRequest) {
  const path=req.nextUrl.pathname;
  const configured=Boolean(process.env.ADMIN_PASSWORD&&process.env.AUTH_SECRET);
  const authenticated=configured&&await validSession(req.cookies.get("ace_session")?.value,process.env.AUTH_SECRET!);
+ if(path==="/api/bridge")return NextResponse.next(); // Backend-only shared-key verification is enforced by the route.
  if(path==="/login" || path==="/api/auth/login"){
   if(path==="/login" && authenticated)return NextResponse.redirect(new URL("/",req.url));
   return NextResponse.next();
