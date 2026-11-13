@@ -1,7 +1,7 @@
 const encoder = new TextEncoder();
 function hex(bytes: Uint8Array) { return Array.from(bytes).map(x=>x.toString(16).padStart(2,"0")).join(""); }
 async function sign(value:string, secret:string) {
- const key = await crypto.subtle.importKey("raw",encoder.encode(secret),"HMAC",false,["sign"]);
+ const key = await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  return hex(new Uint8Array(await crypto.subtle.sign("HMAC",key,encoder.encode(value))));
 }
 export async function createSession(secret:string) {
