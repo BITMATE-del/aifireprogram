@@ -5,7 +5,7 @@ type Account={id:string;name:string;note:string;enabled:boolean};
 type Group={id:string;name:string};
 type Persona={id:string;name:string;role:string;style:string;risk:number};
 type Assignment={accountId:string;groupId:string;personaId:string;mode:"member"|"expert"|"observer"};
-type Props={account:Account|null;groups:Group[];people:Persona[];assignments:Assignment[];save:(persona:Persona,assignment:Assignment)=>void;openTest:(groupId:string)=>void};
+type Props={account:Account|null;initialGroupId?:string;groups:Group[];people:Persona[];assignments:Assignment[];save:(persona:Persona,assignment:Assignment)=>void;openTest:(groupId:string)=>void};
 const templates=[
  {label:"초보 질문형",role:"일반 회원 · 질문형",style:"설명이 어려우면 짧게 묻는다. 같은 질문을 반복하지 않는다.",risk:25},
  {label:"조용한 관망형",role:"일반 회원 · 관망형",style:"대화를 읽되 관련된 질문이 있을 때만 말한다. 가벼운 공감 표현을 남발하지 않는다.",risk:20},
@@ -13,19 +13,19 @@ const templates=[
  {label:"활발한 토론형",role:"일반 회원 · 토론형",style:"다른 의견을 존중하되 궁금한 근거는 적극적으로 질문한다.",risk:65},
  {label:"전문 트레이더",role:"전문가 · 시장분석",style:"실제 데이터에 근거해 분석하고 불확실한 정보는 단정하지 않는다.",risk:50}
 ];
-export default function AccountPersonaEditor({account,groups,people,assignments,save,openTest}:Props){
+export default function AccountPersonaEditor({account,initialGroupId,groups,people,assignments,save,openTest}:Props){
  const [group,setGroup]=useState("");
  const [role,setRole]=useState<Assignment["mode"]>("member");
  const [name,setName]=useState("");
  const [type,setType]=useState(templates[0].role);
  const [style,setStyle]=useState(templates[0].style);
  const [risk,setRisk]=useState(25);
- const [note,setNote]=useState("");
+
  const [message,setMessage]=useState("");
  const accountId=account?.id||"";
  const selectedGroup=group||groups[0]?.id||"";
  const existing=assignments.find(x=>x.accountId===accountId&&x.groupId===selectedGroup);
- useEffect(()=>{setGroup(groups[0]?.id||"");},[accountId,groups.length]);
+ useEffect(()=>{setGroup(initialGroupId&&groups.some(g=>g.id===initialGroupId)?initialGroupId:groups[0]?.id||"");},[accountId,initialGroupId,groups.length]);
  useEffect(()=>{
   const assignment=assignments.find(x=>x.accountId===accountId&&x.groupId===selectedGroup);
   const p=people.find(x=>x.id===assignment?.personaId);
@@ -34,7 +34,7 @@ export default function AccountPersonaEditor({account,groups,people,assignments,
   setStyle(p?.style||templates[0].style);
   setRisk(p?.risk??25);
   setRole(assignment?.mode||"member");
-  setNote("");setMessage("");
+  setMessage("");
  // Rehydrate editor only on account/group switch; saved data is intentionally not overwritten while typing.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[accountId,selectedGroup]);
@@ -52,7 +52,7 @@ export default function AccountPersonaEditor({account,groups,people,assignments,
   <label>1. 활동 그룹<select value={selectedGroup} onChange={e=>setGroup(e.target.value)}>{groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
   <label>2. 참여 역할<select value={role} onChange={e=>setRole(e.target.value as Assignment["mode"])}><option value="member">일반 참여자</option><option value="expert">전문가</option><option value="observer">관망형 (자동 발언 제외)</option></select></label>
   <div className="nxTemplateHeading">3. 성격 선택 <small>누르면 아래 설정에 적용됩니다.</small></div>
-  <div className="nxTemplateChips">{templates.map(t=><button key={t.label} onClick={()=>{setType(t.role);setStyle(t.style);setRisk(t.risk);setNote("");}}>{t.label}</button>)}</div>
+  <div className="nxTemplateChips">{templates.map(t=><button key={t.label} onClick={()=>{setType(t.role);setStyle(t.style);setRisk(t.risk);}}>{t.label}</button>)}</div>
   <label>이름<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
   <label>성격 / 활동 유형<input value={type} onChange={e=>setType(e.target.value)} maxLength={120}/></label>
   <label>말투와 반응 방식<textarea value={style} onChange={e=>setStyle(e.target.value)} rows={4} maxLength={1500} placeholder="예: 시장 얘기를 듣고 궁금한 점만 짧게 묻는 성격"/></label>
