@@ -8,3 +8,5 @@
 .loginError{color:#ffb0b0;align-self:stretch}
 .topActions{display:flex;gap:10px;align-items:center}
 .topActions button{padding:7px 10px;font-size:12px}
+
+.assignmentForm{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px}.assignmentForm>button{min-height:42px}.assignmentList{margin-top:16px}.assignmentItem{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--line)}.assignmentItem span{color:var(--muted);margin-left:8px}.personaPreset{display:grid;gap:9px}.personaPreset>span{font-size:12px;color:var(--muted)}.presetButtons{display:flex;flex-wrap:wrap;gap:6px}.presetButtons button{padding:7px 10px;font-size:12px}@media(max-width:1100px){.assignmentForm{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.assignmentForm{grid-template-columns:1fr}.assignmentItem{align-items:flex-start;flex-direction:column}.assignmentItem span{display:block;margin-left:0}}
