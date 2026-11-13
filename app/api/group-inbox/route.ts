@@ -8,13 +8,14 @@ export async function GET(req:NextRequest){
  if(!chatId||!allowedChats().has(chatId))return answer({connected:false,messages:[],drafts:[],error:"그룹 ID가 허용 목록에 등록되어 있지 않습니다."},200);
  try{
   const db=await bridgeDatabase();
-  const [messages,drafts]=await Promise.all([
+  const [messages,drafts,workers]=await Promise.all([
     db.query(`SELECT id,chat_id,message_id,sender_id,sender_name,body,observed_at
       FROM moment_group_inbox WHERE chat_id=$1 ORDER BY id DESC LIMIT 40`,[chatId]),
     db.query(`SELECT id,account_id,chat_id,reply_to_message_id,body,status,created_at,completed_at,last_error
-      FROM moment_group_outbox WHERE chat_id=$1 ORDER BY id DESC LIMIT 40`,[chatId])
+      FROM moment_group_outbox WHERE chat_id=$1 ORDER BY id DESC LIMIT 40`,[chatId]),
+    db.query("SELECT account_id,last_seen,last_seen > now() - interval '90 seconds' AS online FROM moment_telegram_heartbeats WHERE chat_id=$1 ORDER BY last_seen DESC",[chatId])
   ]);
-  return answer({connected:true,messages:messages.rows.reverse(),drafts:drafts.rows});
+  return answer({connected:true,workers:workers.rows,messages:messages.rows.reverse(),drafts:drafts.rows});
  }catch{return answer({error:"메시지 조회에 실패했습니다."},503);}
 }
 export async function POST(req:NextRequest){
