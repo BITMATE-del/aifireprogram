@@ -42,6 +42,7 @@ async def submit(session, payload):
 async def pump(session):
     while True:
         for chat_id in CHATS:
+            await submit(session,{"type":"heartbeat","accountId":ACCOUNT_ID,"chatId":str(chat_id)})
             try:
                 async with session.get(BASE+"/api/bridge",params={"accountId":ACCOUNT_ID,"chatId":str(chat_id)},headers=headers) as res:
                     if res.status!=200:
