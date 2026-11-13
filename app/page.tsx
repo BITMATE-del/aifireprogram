@@ -1,3 +1,3 @@
-import Studio from "./studio";
-import "./studio.css";
-export default function Home(){return <Studio/>;}
+import Workspace from "./workspace";
+import "./workspace.css";
+export default function Home(){return <Workspace/>;}
