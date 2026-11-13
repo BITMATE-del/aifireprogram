@@ -43,7 +43,7 @@ export default function AccountPersonaEditor({account,groups,people,assignments,
  const shared=currentPersona&&assignments.filter(x=>x.personaId===currentPersona.id).length>1;
  function commit(){
   if(!selectedGroup||!name.trim()){setMessage("그룹과 표시 이름을 확인하세요.");return;}
-  const personaId=existing&&!shared?existing.personaId:"account-"+accountId.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,30)+"-"+selectedGroup.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,30)+"-"+Date.now().toString(36);
+  const personaId=existing&&!shared&&existing.personaId.startsWith("account-")?existing.personaId:"account-"+accountId.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,30)+"-"+selectedGroup.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,30)+"-"+Date.now().toString(36);
   save({id:personaId,name:name.trim(),role:type,style:style.trim(),risk},{accountId,groupId:selectedGroup,personaId,mode:role});
   setMessage("이 계정의 그룹별 성격이 저장되었습니다.");
  }
