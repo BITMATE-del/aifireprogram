@@ -19,6 +19,10 @@ export async function bridgeDatabase(){
     completed_at timestamptz, last_error text,
     CHECK(status IN ('pending','sending','sent','failed','cancelled'))
    )`);
+   await db.query(`CREATE TABLE IF NOT EXISTS moment_telegram_heartbeats(
+    account_id text NOT NULL, chat_id text NOT NULL, last_seen timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(account_id,chat_id)
+   )`);
    await db.query("CREATE INDEX IF NOT EXISTS moment_inbox_chat_recent ON moment_group_inbox(chat_id,id DESC)");
    await db.query("CREATE INDEX IF NOT EXISTS moment_outbox_account_status ON moment_group_outbox(account_id,status,id)");
   })().catch(err=>{initialized=null;throw err});
