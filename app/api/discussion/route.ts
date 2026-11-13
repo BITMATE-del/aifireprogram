@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   if(!topic || personas.length<2) return NextResponse.json({error:"주제와 최소 2명의 페르소나가 필요합니다."},{status:400});
   if(JSON.stringify(body).length>25000) return NextResponse.json({error:"요청 크기가 너무 큽니다."},{status:413});
   const apiKey=process.env.OPENAI_API_KEY;
+  if(apiKey && (!process.env.ADMIN_ACCESS_TOKEN || req.headers.get("x-admin-token") !== process.env.ADMIN_ACCESS_TOKEN)) return NextResponse.json({error:"AI 생성 접근 권한이 없습니다. 서버 ADMIN_ACCESS_TOKEN과 관리자 접근 토큰을 설정하세요."},{status:403});
   if(!apiKey) return NextResponse.json({mode:"sample",turns:sample(topic,personas),notice:"샘플 토론입니다. OPENAI_API_KEY 미설정으로 실제 AI 호출은 수행하지 않았습니다."});
   const instructions="당신은 공개적으로 AI 시뮬레이션임을 밝힌 비공개 투자 토론 테스트의 대화 감독입니다. 각 페르소나의 이름과 역할을 반영하여 서로 다른 의견, 근거, 질문이 자연스럽게 이어지는 한국어 대화 4~6개를 작성하세요. 입력에 없는 구체적인 실시간 가격이나 실제 수익, 체결 내역을 지어내지 마세요. 수익은 입증된 경우만 실제로 표현하고 그 외에는 모의투자로 표시하세요. 지나친 칭찬, 의미 없는 맞장구, 반복은 피하세요. JSON 객체 {\\\"turns\\\":[{\\\"speakerId\\\":\\\"...\\\",\\\"speaker\\\":\\\"...\\\",\\\"text\\\":\\\"...\\\"}]}만 출력하세요.";
   const response=await fetch("https://api.openai.com/v1/chat/completions",{
