@@ -28,7 +28,7 @@ export async function POST(req:NextRequest){
  catch{return answer({error:"요청 형식 오류"},400)}
  const chatId=safeChatId(body.chatId),accountId=safeAccountId(body.accountId);
  const messageId=Number(body.messageId),text=typeof body.text==="string"?body.text.trim():"";
- if(!chatId||!allowedChats().has(chatId)||!accountId||!Number.isSafeInteger(messageId)||messageId<=0||text.length<1||text.length>700)return answer({error:"그룹·계정·메시지 정보를 확인하세요."},400);
+ if(!chatId||!(await isAllowedGroup(chatId))||!accountId||!Number.isSafeInteger(messageId)||messageId<=0||text.length<1||text.length>700)return answer({error:"그룹·계정·메시지 정보를 확인하세요."},400);
  try{
   const db=await bridgeDatabase();
   const snapshot=await db.query("SELECT content FROM moment_workspace_state WHERE id='primary'");
