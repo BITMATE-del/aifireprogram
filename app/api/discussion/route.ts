@@ -7,7 +7,7 @@ export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer";frequency:"quiet"|"balanced"|"active";responseMode:"reactive"|"balanced"|"independent";interests:string};
 type Turn={speakerId:string;speaker:string;text:string};
 function str(v:unknown,max=500){return typeof v==="string"?v.trim().slice(0,max):""}
-function personasOf(v:unknown):Persona[]{if(!Array.isArray(v))return [];return v.slice(0,20).filter(p=>p&&typeof p==="object"&&typeof p.id==="string"&&typeof p.name==="string").map(p=>({id:str(p.id,80),name:str(p.name,60),role:str(p.role,120),style:str(p.style,1200),risk:typeof p.risk==="number"?Math.max(0,Math.min(100,p.risk)):50,accountId:str(p.accountId,120),participationRole:p.participationRole==="expert"?"expert":p.participationRole==="observer"?"observer":"member",frequency:p.frequency==="quiet"?"quiet":p.frequency==="active"?"active":"balanced",responseMode:p.responseMode==="reactive"?"reactive":p.responseMode==="independent"?"independent":"balanced",interests:str(p.interests,250)}));}
+function personasOf(v:unknown):Persona[]{if(!Array.isArray(v))return [];return v.slice(0,20).filter(p=>p&&typeof p==="object"&&typeof p.id==="string"&&typeof p.name==="string").map(p=>({id:str(p.id,200),name:str(p.name,60),role:str(p.role,120),style:str(p.style,1200),risk:typeof p.risk==="number"?Math.max(0,Math.min(100,p.risk)):50,accountId:str(p.accountId,120),participationRole:p.participationRole==="expert"?"expert":p.participationRole==="observer"?"observer":"member",frequency:p.frequency==="quiet"?"quiet":p.frequency==="active"?"active":"balanced",responseMode:p.responseMode==="reactive"?"reactive":p.responseMode==="independent"?"independent":"balanced",interests:str(p.interests,250)}));}
 function sample(topic:string,people:Persona[],human:string):Turn[]{
  const order=[...people].filter(p=>p.participationRole!=="observer").sort((a,b)=>Number(a.participationRole==="expert")-Number(b.participationRole==="expert"));
  const entries=order.slice(0,Math.min(4,order.length));
@@ -79,8 +79,8 @@ export async function POST(req:NextRequest){
     participationRole:p.participationRole,frequency:p.frequency,responseMode:p.responseMode,interests:p.interests,activity:p.participationRole==="expert"?"정보가 꼭 필요할 때만":"대화 가치가 있을 때만"}));
   const idFromSlot=new Map(roster.map((p,i)=>[p.speakerId,speakers[i]]));
   const directorInstructions=directorMode?[
-    "모든 메시지에 반응할 필요는 없습니다. 전체 문맥을 먼저 읽고 정말 도움이 될 때만 speak=true로 판단합니다.",
-    "인사, 짧은 감탄, 이미 답이 나온 질문, 사람이 서로 대화 중인 경우는 speak=false를 우선합니다.",
+    "모든 메시지에 반응할 필요는 없습니다. 전체 문맥을 먼저 읽고 정말 도움이 될 때만 decision=reply로 판단합니다.",
+    "인사, 짧은 감탄, 이미 답이 나온 질문, 사람이 서로 대화 중인 경우는 decision=silent를 우선합니다.",
     "상황에 맞는 한 명만 우선 선택하고, 서로 다른 근거가 유용한 경우에만 2명까지 허용합니다. 같은 계정의 연속 발언을 피합니다.",
     "응답의 목적은 정보를 보태거나 질문을 명확히 하는 것입니다. 대화를 억지로 지속하거나 질문으로 끝내려 하지 않습니다.",
     "인간의 대화 주도권을 우선합니다. 문장은 어색한 요약·교과서식 안내·상투적 맞장구를 피하고, 각 페르소나 말투와 길이를 구별합니다.",
@@ -137,10 +137,19 @@ export async function POST(req:NextRequest){
 
   let parsed:{decision?:unknown;reason?:unknown;turns?:{speakerId?:unknown;text?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
-  const normalize=(v:string)=>v.toLowerCase().replace(/[\\s\\p{P}\\p{S}]/gu,"");
-  const seen=new Set(history.slice(-10).map(x=>normalize(x.text)));
+  const normalize=(v:string)=>v.toLowerCase().replace(/[\s\p{P}\p{S}]/gu,"");
+  const seen=new Set(history.slice(-20).map(x=>normalize(x.text)));
+  // Filter highly similar boilerplate, not just identical wording.
+  const grams=(v:string)=>{const n=normalize(v);return new Set(Array.from({length:Math.max(0,n.length-2)},(_,i)=>n.slice(i,i+3)))};
+  const similarity=(a:string,b:string)=>{
+    const x=grams(a),y=grams(b);
+    if(x.size<5||y.size<5)return 0;
+    let intersect=0;for(const g of x)if(y.has(g))intersect++;
+    return intersect/Math.max(1,Math.min(x.size,y.size));
+  };
+  const recentTexts=history.slice(-14).map(x=>x.text);
   const decodeSpeaker=(raw:unknown):Persona|undefined=>{
-    const label=str(raw,140).trim();
+    const label=str(raw,220).trim();
     if(!label)return speakers.length===1?speakers[0]:undefined;
     const normalized=label.replace(/^[#"'\s]+|[#"'\s]+$/g,"").toUpperCase();
     // Models sometimes write "P1", "p1", "1", or "speaker_P1".
@@ -168,7 +177,13 @@ export async function POST(req:NextRequest){
     if(!matching){rejectedSpeaker++;return [];}
     const message=str(reply.text??reply.message??reply.content,700);
     if(!message){rejectedEmpty++;return [];}
-    if(seen.has(normalize(message))){rejectedRepeat++;return [];}
+    if(seen.has(normalize(message))||recentTexts.some(previous=>similarity(previous,message)>0.82)){
+     rejectedRepeat++;return [];
+    }
+    // Don't publish rote introductions or unsupported certainty as "human-like" participation.
+    if(directorMode&&(/^(?:종합적으로|결론적으로|요약하자면|투자 판단에 있어)/.test(message)||/무조건\s*(?:오릅니다|상승합니다)|수익(?:률)?\s*(?:보장|확정)/.test(message))){
+     rejectedRepeat++;return [];
+    }
     seen.add(normalize(message));
     return [{speakerId:matching.id,speaker:matching.name,text:message}];
   });
