@@ -87,8 +87,10 @@ export async function POST(req:NextRequest){
     "frequency=quiet인 계정은 매우 드물게, active는 관련 주제에 조금 더 적극적으로, balanced는 중간 정도로 참여합니다. 어떤 성격도 반드시 말해야 하는 것은 아닙니다.",
     "responseMode=reactive는 사람 발언에 대한 자연스러운 반응, independent는 별도 관점 제시, balanced는 상황에 맞게 선택합니다. interests는 관련성 판단에 활용합니다.",
     "문장에 인위적 오타를 넣거나 사람이 실제로 한 거래·경험을 AI가 한 것처럼 쓰지 않습니다.",
+    "groupMemory와 accountPriorMessages는 실제 대화에서 얻은 참고 정보입니다. 최신 발언이 우선하며 이전 판단의 일관성을 유지하되 오래된 전망을 사실처럼 취급하지 않습니다.",
+    "memorySummary는 최근 실제 대화의 주제와 이미 제시된 입장만 400자 이내로 갱신합니다. 확인하지 않은 사실·투자 성과를 만들지 않습니다.",
     "명시적으로 말할 필요가 없다면 decision=\"silent\", turns=[]를 반환합니다. 필요할 때 decision=\"reply\"를 반환합니다.",
-    '출력 JSON: {"decision":"silent|reply","reason":"운영자가 볼 짧은 한국어 근거","turns":[{"speakerId":"P1","text":"발언"}]}'
+    '출력 JSON: {"decision":"silent|reply","reason":"운영자가 볼 짧은 한국어 근거","memorySummary":"실제 대화의 핵심 맥락 400자 이내","turns":[{"speakerId":"P1","text":"발언"}]}'
   ]:[];
   const description=[
     "당신은 비공개 AI 투자 커뮤니티 시뮬레이션의 대화 디렉터입니다.",
@@ -113,7 +115,10 @@ export async function POST(req:NextRequest){
       response_format:{type:"json_object"},
       temperature:0.7,
       max_tokens:1200,
-      messages:[{role:"system",content:description},{role:"user",content:JSON.stringify({topic,humanMessage:human,isDirectQuestion,personas:roster,history,directorMode,marketData:"실시간 시세 미연동"})}]
+      messages:[{role:"system",content:description},{role:"user",content:JSON.stringify({topic,humanMessage:human,isDirectQuestion,personas:roster,history,directorMode,
+        groupMemory:str(input?.groupMemory,600),
+        accountPriorMessages:Array.isArray(input?.accountPriorMessages)?input.accountPriorMessages.slice(0,16):[],
+        marketData:"실시간 시세 미연동"})}]
     }),
     signal:AbortSignal.timeout(30000),cache:"no-store"
   });
@@ -135,7 +140,7 @@ export async function POST(req:NextRequest){
    }catch(error){console.error("AI usage ledger write failed",error instanceof Error?error.name:"unknown");}
   }
 
-  let parsed:{decision?:unknown;reason?:unknown;turns?:{speakerId?:unknown;text?:unknown}[]};
+  let parsed:{decision?:unknown;reason?:unknown;memorySummary?:unknown;turns?:{speakerId?:unknown;text?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
   const normalize=(v:string)=>v.toLowerCase().replace(/[\s\p{P}\p{S}]/gu,"");
   const seen=new Set(history.slice(-20).map(x=>normalize(x.text)));
@@ -195,8 +200,8 @@ export async function POST(req:NextRequest){
       :reason==="DUPLICATE_TURNS"?"생성된 반응이 이전 대화와 동일해 제외됐습니다."
       :"AI가 빈 발언을 반환해 제외됐습니다.";
     console.info("AI discussion filtered", {reason,returned:rawTurns.length,rejectedSpeaker,rejectedRepeat,rejectedEmpty});
-    return NextResponse.json({mode:"ai",turns:[],reason,decision:"silent",decisionReason:str(parsed.reason,180)||notice,notice},{headers:{"Cache-Control":"no-store"}});
+    return NextResponse.json({mode:"ai",turns:[],reason,decision:"silent",decisionReason:str(parsed.reason,180)||notice,memorySummary:str(parsed.memorySummary,500),notice},{headers:{"Cache-Control":"no-store"}});
   }
-  return NextResponse.json({mode:"ai",turns,decision:"reply",decisionReason:str(parsed.reason,180)||"유용한 후속 발언",notice:"대화 흐름에 맞는 반응을 생성했습니다."},{headers:{"Cache-Control":"no-store"}});
+  return NextResponse.json({mode:"ai",turns,decision:"reply",decisionReason:str(parsed.reason,180)||"유용한 후속 발언",memorySummary:str(parsed.memorySummary,500),notice:"대화 흐름에 맞는 반응을 생성했습니다."},{headers:{"Cache-Control":"no-store"}});
  }catch{return NextResponse.json({error:"토론 생성 중 서버 오류가 발생했습니다."},{status:500})}
 }
