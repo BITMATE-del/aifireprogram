@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {allowedChats,authorizedBridge,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
+import {isAllowedGroup,authorizedBridge,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
@@ -9,7 +9,7 @@ export async function POST(req:NextRequest){
  try{const text=await req.text();if(text.length>4000)return reply({error:"크기 제한"},413);body=JSON.parse(text);}catch{return reply({error:"잘못된 요청"},400);}
  const type=body.type;
  const chatId=safeChatId(body.chatId);
- if(!chatId||!allowedChats().has(chatId))return reply({error:"허용되지 않은 그룹"},403);
+ if(!chatId||!(await isAllowedGroup(chatId)))return reply({error:"허용되지 않은 그룹"},403);
  try{
   const db=await bridgeDatabase();
   if(type==="heartbeat"){
