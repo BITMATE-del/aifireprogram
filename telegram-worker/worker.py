@@ -58,7 +58,9 @@ async def connect_account(session:ClientSession,entry:dict,fingerprint:str):
         user=await client.get_me()
         chat_ids=set(int(cid) for cid in entry["chatIds"])
         connection=Connection(account_id,fingerprint,client,chat_ids,user.id)
-        await client.get_dialogs()
+        dialogs=await client.get_dialogs()
+        discovered=[{"id":str(d.id),"title":str(d.name or "그룹")[:120]} for d in dialogs if d.is_group]
+        await bridge_json(session,"POST","/api/bridge/groups",json={"accountId":account_id,"groups":discovered[:100]})
 
         @client.on(events.NewMessage(incoming=True))
         async def on_message(event):
