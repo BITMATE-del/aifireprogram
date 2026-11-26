@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from "next/server";
 import {isAllowedGroup,authorizedBridge,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
+import {autoDb} from "../../../lib/auto-conversation";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
@@ -49,11 +50,22 @@ export async function GET(req:NextRequest){
  const chatId=safeChatId(req.nextUrl.searchParams.get("chatId"));
  if(!accountId||!chatId||!(await isAllowedGroup(chatId)))return reply({error:"계정·그룹 확인 실패"},403);
  try{
-  const db=await bridgeDatabase(),client=await db.connect();
+  const db=await autoDb(),client=await db.connect();
   try{
    await client.query("BEGIN");
+   // A person's newer message supersedes any delayed AI-to-AI follow-up.
+   // When Start/Stop was turned off, old queued auto messages must not leak.
+   await client.query(`UPDATE moment_group_outbox o SET status='cancelled',completed_at=now(),
+      last_error='대화 흐름 변경 또는 작동 정지로 자동 발언 취소'
+      WHERE o.account_id=$1 AND o.chat_id=$2 AND o.source_type='auto' AND o.status='pending'
+      AND (
+        NOT EXISTS(SELECT 1 FROM moment_auto_groups g WHERE g.chat_id=o.chat_id AND g.enabled=true)
+        OR EXISTS(SELECT 1 FROM moment_group_inbox i
+          WHERE i.chat_id=o.chat_id AND i.message_id>o.reply_to_message_id)
+      )`,[accountId,chatId]);
    const job=await client.query(`SELECT id,account_id,chat_id,reply_to_message_id,body
     FROM moment_group_outbox WHERE status='pending' AND account_id=$1 AND chat_id=$2
+     AND not_before<=now()
     ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1`,[accountId,chatId]);
    if(job.rowCount){
     await client.query("UPDATE moment_group_outbox SET status='sending',claimed_at=now() WHERE id=$1",[job.rows[0].id]);
