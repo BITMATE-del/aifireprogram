@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useState} from "react";
 import {Check,Eye,EyeOff,KeyRound,Lock,Save,Trash2,WifiOff} from "lucide-react";
+import TelegramPhoneLogin from "./telegram-phone-login";
 type Field="telegramApiId"|"telegramApiHash"|"telegramSession"|"openaiApiKey";
 type Status={telegramApiId:boolean;telegramApiHash:boolean;telegramSession:boolean;openaiApiKey:boolean;updatedAt:string|null};
 type Source="custom"|"default"|"none";
@@ -21,6 +22,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
  const [loading,setLoading]=useState(false),[working,setWorking]=useState<Field|null>(null);
  const [notice,setNotice]=useState("");
  const [testing,setTesting]=useState(false);
+ const [loginMode,setLoginMode]=useState<"phone"|"session">("phone");
  useEffect(()=>{
   let alive=true;
   setInputs({telegramApiId:"",telegramApiHash:"",telegramSession:"",openaiApiKey:""});
@@ -45,6 +47,13 @@ export default function AccountCredentials({accountId}:{accountId:string}){
   }catch(e){setNotice(e instanceof Error?e.message:"저장 실패")}
   finally{setWorking(null)}
  }
+ async function refreshCredentialStatus(){
+  try{
+   const r=await fetch("/api/account-credentials?accountId="+encodeURIComponent(accountId),{cache:"no-store"});
+   const data=await r.json();
+   if(r.ok){setStatus(data.status);setSources(data.sources||none);}
+  }catch{}
+ }
  async function testOpenAi(){
   if(testing)return;setTesting(true);setNotice("");
   try{
@@ -57,7 +66,8 @@ export default function AccountCredentials({accountId}:{accountId:string}){
  }
  return <section className="nxCredentialPanel">
    <div className="nxCredentialHead"><div><strong><KeyRound size={17}/> 계정별 API 연결</strong><p><b>{accountId}</b> 계정만의 인증정보를 등록합니다.</p></div><span className="nxCredentialSecure"><Lock size={13}/> 서버 암호화</span></div>
-   <div className="nxCredentialFields">{labels.map(row=><div className="nxCredentialField" key={row.field}>
+   <div className="nxTelegramMode"><strong>텔레그램 계정 로그인 방식</strong><div><button className={loginMode==="phone"?"active":""} onClick={()=>setLoginMode("phone")}>전화번호로 일반 로그인</button><button className={loginMode==="session"?"active":""} onClick={()=>setLoginMode("session")}>기존 세션 직접 입력</button></div></div>
+   <div className="nxCredentialFields">{labels.map(row=>row.field==="telegramSession"&&loginMode==="phone"?<div className="nxCredentialField" key={row.field}><TelegramPhoneLogin accountId={accountId} onConnected={()=>{void refreshCredentialStatus()}}/></div>:<div className="nxCredentialField" key={row.field}>
     <div className="nxCredentialLabel"><strong>{row.label}</strong><span className={sources[row.field]!=="none"?"nxCredentialOn":"nxCredentialOff"}>{loading?"확인 중":sources[row.field]==="custom"?"개별 설정":sources[row.field]==="default"?"전체 기본값 사용":"미설정"}</span></div>
     <p>{row.tip}</p>
     <div className="nxCredentialControls">
@@ -67,7 +77,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
       {sources[row.field]==="custom"&&<button className="nxCredentialDelete" disabled={loading||!!working} title={row.field==="telegramSession"?"저장된 세션 해제":"개별값 해제하고 기본값 사용"} onClick={()=>{if(confirm(row.label+" 개별값을 해제하시겠습니까? 기본값이 있다면 자동 적용됩니다."))void mutate(row.field,null)}}><Trash2 size={15}/></button>}
     </div></div>)}</div>
    <div className="nxCredentialTest"><button disabled={testing||loading||sources.openaiApiKey==="none"} onClick={testOpenAi}><Check size={15}/>{testing?"키 확인 중":"저장된 OpenAI API 연결 확인"}</button><span>API 키 유효성만 확인하며 토큰 생성 비용이 발생하지 않는 조회입니다.</span></div>
-   <div className="nxCredentialHelp"><WifiOff size={16}/><span>Telegram API ID·HASH는 전체 기본값을 사용할 수 있습니다. Telegram 로그인 세션은 계정마다 반드시 등록해야 합니다. 등록 후 연결은 별도 워커가 수행합니다. API 키와 세션은 브라우저 저장소나 백업 파일에 포함되지 않습니다.</span></div>
+   <div className="nxCredentialHelp"><WifiOff size={16}/><span>Telegram API ID·HASH는 전체 기본값을 사용할 수 있습니다. 전화번호 인증으로 계정별 로그인 세션을 자동 생성하거나, 기존 StringSession을 직접 입력할 수 있습니다. 등록 후 연결은 별도 워커가 수행합니다. API 키와 세션은 브라우저 저장소나 백업 파일에 포함되지 않습니다.</span></div>
    {notice&&<div className="nxCredentialNotice" role="status"><Check size={15}/>{notice}</div>}
  </section>;
 }
