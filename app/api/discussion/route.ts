@@ -2,7 +2,7 @@ import {NextRequest,NextResponse} from "next/server";
 import {effectiveAccountSecret} from "../../../lib/credential-vault";
 import {recordUsage} from "../../../lib/ai-usage";
 import {checkAiBudget} from "../../../lib/ai-budget";
-import {allowedChats,bridgeDatabase} from "../../../lib/group-bridge";
+import {isAllowedGroup,bridgeDatabase} from "../../../lib/group-bridge";
 export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
 type Turn={speakerId:string;speaker:string;text:string};
@@ -28,7 +28,7 @@ export async function POST(req:NextRequest){
   const topic=str(input?.topic,1200),human=str(input?.humanMessage,1200),people=personasOf(input?.personas);
   let history:{speaker:string;text:string}[]=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
   const groupId=str(input?.groupId,120);
-  if(allowedChats().has(groupId)){
+  if(groupId && await isAllowedGroup(groupId)){
    try{
     const db=await bridgeDatabase();
     const recent=await db.query(`SELECT sender_name AS speaker,body AS text FROM
