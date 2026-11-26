@@ -35,6 +35,11 @@ export async function autoDb(){
    await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS decision_type text");
    await db.query("CREATE INDEX IF NOT EXISTS moment_outbox_due ON moment_group_outbox(chat_id,account_id,not_before) WHERE status='pending'");
    await db.query("CREATE INDEX IF NOT EXISTS moment_auto_jobs_group_recent ON moment_auto_jobs(chat_id,id DESC)");
+   await db.query(`CREATE TABLE IF NOT EXISTS moment_group_memory(
+     chat_id text PRIMARY KEY,
+     summary text NOT NULL DEFAULT '',
+     updated_at timestamptz NOT NULL DEFAULT now()
+   )`);
    await db.query("CREATE INDEX IF NOT EXISTS moment_auto_groups_enabled ON moment_auto_groups(enabled)");
   })();
   ready.catch(()=>{ready=null;});
