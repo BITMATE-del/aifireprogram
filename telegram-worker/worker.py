@@ -1,7 +1,7 @@
 """Multi-account, opt-in Telegram worker for Moment Studio.
 
 Telegram credentials are configured per account on the admin website.
-Secrets never appear in server logs. Only explicitly approved replies are sent.
+Secrets never appear in server logs. Automatic replies require administrator start and group disclosure.
 """
 import asyncio
 import hashlib
@@ -24,6 +24,7 @@ if len(BRIDGE_KEY)<32 or not BASE.startswith("https://"):
 POLL_SECONDS=max(5,int(os.getenv("BRIDGE_POLL_SECONDS","8")))
 REFRESH_SECONDS=max(30,int(os.getenv("ACCOUNT_REFRESH_SECONDS","60")))
 HEADERS={"x-bridge-key":BRIDGE_KEY}
+OWNED_USER_IDS:set[int]=set()
 
 
 @dataclass
@@ -66,7 +67,7 @@ async def connect_account(session:ClientSession,entry:dict,fingerprint:str):
         async def on_message(event):
             if event.chat_id not in connection.chat_ids or not event.is_group or not event.raw_text:
                 return
-            if event.sender_id==connection.user_id:
+            if event.sender_id in OWNED_USER_IDS or event.sender_id==connection.user_id:
                 return
             try:
                 sender=await event.get_sender()
@@ -118,6 +119,8 @@ async def update_accounts(session:ClientSession,connections:dict[str,Connection]
         connection=await connect_account(session,entry,fingerprint)
         if connection:
             connections[account_id]=connection
+    OWNED_USER_IDS.clear()
+    OWNED_USER_IDS.update(connection.user_id for connection in connections.values())
 
 
 async def deliver_approved(session:ClientSession,connection:Connection,chat_id:int):
@@ -129,9 +132,10 @@ async def deliver_approved(session:ClientSession,connection:Connection,chat_id:i
         return
     job_id=int(job["id"])
     try:
-        # Transparency: these messages come from a declared AI simulation.
-        body="[AI 시뮬레이션] "+str(job["body"])
-        message=await connection.client.send_message(chat_id,body,reply_to=int(job["reply_to_message_id"]))
+        # The operator must disclose AI identity in the account/group details.
+        # Send a normal group message, not a reply to a particular member.
+        body=str(job["body"])
+        message=await connection.client.send_message(chat_id,body)
         await bridge_json(session,"POST","/api/bridge",json={
             "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
             "jobId":job_id,"sent":True,"sentMessageId":message.id
@@ -155,7 +159,7 @@ async def deliver_approved(session:ClientSession,connection:Connection,chat_id:i
 
 async def run():
     connections:dict[str,Connection]={}
-    timeout=ClientTimeout(total=25)
+    timeout=ClientTimeout(total=55)
     async with ClientSession(timeout=timeout) as session:
         next_refresh=0.0
         while True:
@@ -172,6 +176,7 @@ async def run():
                         await bridge_json(session,"POST","/api/bridge",json={
                             "type":"heartbeat","accountId":connection.account_id,"chatId":str(chat_id)
                         })
+                        await bridge_json(session,"GET","/api/bridge/auto",params={"accountId":connection.account_id,"chatId":str(chat_id)})
                         await deliver_approved(session,connection,chat_id)
             except Exception as exc:
                 log.warning("Worker cycle error: %s",type(exc).__name__)
