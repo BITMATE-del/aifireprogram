@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {accountSecret} from "../../../lib/credential-vault";
+import {effectiveAccountSecret} from "../../../lib/credential-vault";
 import {recordUsage} from "../../../lib/ai-usage";
 export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
@@ -26,12 +26,18 @@ export async function POST(req:NextRequest){
   const topic=str(input?.topic,1200),human=str(input?.humanMessage,1200),people=personasOf(input?.personas);
   const history=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
   if(!topic||people.length<1)return NextResponse.json({error:"토론 주제와 발언 가능한 AI 페르소나 1명 이상이 필요합니다."},{status:400});
-  const accountIds=Array.from(new Set(people.map(p=>p.accountId).filter(Boolean)));
   const preferred=str(input?.credentialAccountId,120);
-  const lookupIds=preferred?[preferred,...accountIds.filter(x=>x!==preferred)]:accountIds;
+  const allowedAccounts=new Set(people.map(p=>p.accountId).filter(Boolean));
+  const chosen=allowedAccounts.has(preferred)?preferred:people[0]?.accountId||"";
   let key:string|null=null;
   let billedAccountId="";
-  for(const accountId of lookupIds){try{key=await accountSecret(accountId,"openaiApiKey")}catch{}if(key){billedAccountId=accountId;break;}}
+  if(chosen){
+   try{
+    const credential=await effectiveAccountSecret(chosen,"openaiApiKey");
+    key=credential.value;
+    if(key)billedAccountId=chosen;
+   }catch{}
+  }
   if(!key){key=process.env.OPENAI_API_KEY||null;billedAccountId=key?"__server_default__":"";}
   if(!key)return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"등록된 계정별 OpenAI 키나 서버 기본 API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});
   const description=[
