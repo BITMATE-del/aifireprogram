@@ -10,6 +10,8 @@ export default function ServerStoragePanel({state,onLoad}:Props){
  const [working,setWorking]=useState(false),[notice,setNotice]=useState("");
  const [auto,setAuto]=useState(false),[baseline,setBaseline]=useState("");
  const syncedVersion=useRef(0),busy=useRef(false),lastSaved=useRef("");
+ const onLoadRef=useRef(onLoad);
+ onLoadRef.current=onLoad;
  const fetchServer=useCallback(async()=>{
   const r=await fetch("/api/workspace",{cache:"no-store"});const data=await r.json();
   if(!r.ok)throw Error(data.error||"서버 저장소에 연결하지 못했습니다.");
@@ -25,7 +27,7 @@ export default function ServerStoragePanel({state,onLoad}:Props){
    // On reload, never silently push a different browser's data to server.
    if(data.exists&&data.state){
     // Production always treats PostgreSQL as authoritative.
-    onLoad(data.state);
+    onLoadRef.current(data.state);
     localStorage.setItem("ace.autosave","on");
     setAuto(true);
    }else{
@@ -34,7 +36,7 @@ export default function ServerStoragePanel({state,onLoad}:Props){
   }catch(e){setStatus("unavailable");setAuto(false);setNotice(e instanceof Error?e.message:"서버 저장소 연결 실패");}
  // Load the current server snapshot before enabling production autosave.
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[fetchServer,onLoad]);
+ },[fetchServer]);
  useEffect(()=>{void refresh()},[refresh]);
  useEffect(()=>{
   function updateFromGroupSelection(event:Event){
