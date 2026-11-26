@@ -1,6 +1,6 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
-import {Check,RefreshCw,Users,WifiOff} from "lucide-react";
+import {Check,RefreshCw,Search,Users,WifiOff,X} from "lucide-react";
 type Group={id:string;name:string};
 type Assignment={accountId:string;groupId:string;personaId:string;mode:"member"|"expert"|"observer"};
 type WorkspaceState={accounts:unknown[];groups:Group[];people:unknown[];assignments:Assignment[];messages:unknown[];activeGroup:string};
@@ -13,6 +13,8 @@ export default function AccountGroupPicker({accountId,assignments,onSynced}:{
  const [items,setItems]=useState<Found[]>([]);
  const [loading,setLoading]=useState(false),[saving,setSaving]=useState<string|null>(null);
  const [notice,setNotice]=useState("");
+ const [search,setSearch]=useState("");
+ const [selectedOnly,setSelectedOnly]=useState(false);
  const refresh=useCallback(async()=>{
   setLoading(true);setNotice("");
   try{
@@ -23,7 +25,7 @@ export default function AccountGroupPicker({accountId,assignments,onSynced}:{
   }catch(e){setNotice(e instanceof Error?e.message:"그룹 조회 실패")}
   finally{setLoading(false)}
  },[accountId]);
- useEffect(()=>{setItems([]);void refresh()},[refresh]);
+ useEffect(()=>{setItems([]);setSearch("");setSelectedOnly(false);void refresh()},[refresh]);
  async function toggle(group:Found,next:boolean){
   if(saving)return;
   setSaving(group.id);setNotice("");
@@ -38,18 +40,26 @@ export default function AccountGroupPicker({accountId,assignments,onSynced}:{
   finally{setSaving(null)}
  }
  const unique=[...new Map(items.map(g=>[g.id,g])).values()];
- const count=unique.filter(g=>assignments.some(a=>a.accountId===accountId&&a.groupId===g.id)).length;
+ const assigned=new Set(assignments.filter(a=>a.accountId===accountId).map(a=>a.groupId));
+ const count=unique.filter(g=>assigned.has(g.id)).length;
+ const query=search.trim().toLocaleLowerCase("ko-KR");
+ const filtered=unique.filter(g=>(!selectedOnly||assigned.has(g.id))&&(!query||g.name.toLocaleLowerCase("ko-KR").includes(query)||g.id.toLowerCase().includes(query)));
  return <section className="nxPanel nxAccountGroups">
   <div className="nxPanelHeading"><div><h2>참여할 그룹 선택 <small>{count}개 선택</small></h2><p>로그인한 텔레그램 계정의 그룹을 불러옵니다. 체크하면 등록과 서버 배정이 한 번에 완료됩니다.</p></div><button disabled={loading||!!saving} onClick={()=>void refresh()}><RefreshCw size={15}/>{loading?"조회 중":"목록 새로고침"}</button></div>
-  {unique.length?unique.map(g=>{
-   const checked=assignments.some(a=>a.accountId===accountId&&a.groupId===g.id);
+  <div className="nxGroupSearchTools">
+   <div className="nxGroupSearchInput"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="그룹 이름 또는 ID 검색" aria-label="그룹 이름 또는 ID 검색"/>{search&&<button type="button" title="검색어 지우기" aria-label="검색어 지우기" onClick={()=>setSearch("")}><X size={15}/></button>}</div>
+   <label className="nxSelectedOnly"><input type="checkbox" checked={selectedOnly} onChange={e=>setSelectedOnly(e.target.checked)}/> 선택된 그룹만</label>
+   <span className="nxGroupResultCount">{filtered.length} / {unique.length}개</span>
+  </div>
+  {filtered.length?filtered.map(g=>{
+   const checked=assigned.has(g.id);
    return <label key={g.id} className={"nxGroupCheckRow "+(checked?"checked":"")}>
     <input type="checkbox" checked={checked} disabled={!!saving} onChange={e=>void toggle(g,e.target.checked)}/>
     <span className="nxGroupCheckIcon"><Users size={16}/></span>
     <span className="nxGroupCheckInfo"><strong>{g.name}</strong><small>{g.id}</small></span>
     <span className="nxGroupCheckStatus">{saving===g.id?"저장 중":checked?<><Check size={14}/> 배정됨</>:"미선택"}</span>
    </label>;
-  }):<div className="nxGroupEmpty"><WifiOff size={21}/><strong>아직 그룹 목록을 확인하지 못했습니다.</strong><p>텔레그램 로그인 세션이 저장됐다면 워커가 해당 계정을 연결해 참여 그룹을 가져옵니다. 계정 등록이 서버에 저장되어 있어야 하며, 로그인 직후에는 연결에 시간이 걸릴 수 있습니다.</p></div>}
+  }):unique.length?<div className="nxGroupEmpty"><Search size={21}/><strong>검색 결과가 없습니다.</strong><p>그룹 이름이나 ID를 다시 검색하거나 선택된 그룹만 보기 옵션을 해제하세요.</p><button type="button" className="nxTelegramMinor" onClick={()=>{setSearch("");setSelectedOnly(false)}}>검색 초기화</button></div>:<div className="nxGroupEmpty"><WifiOff size={21}/><strong>아직 그룹 목록을 확인하지 못했습니다.</strong><p>텔레그램 로그인 세션이 저장됐다면 워커가 해당 계정을 연결해 참여 그룹을 가져옵니다. 계정 등록이 서버에 저장되어 있어야 하며, 로그인 직후에는 연결에 시간이 걸릴 수 있습니다.</p></div>}
   <p className="nxTip">그룹 조회만으로 메시지를 읽거나 보내지 않습니다. 실제 활동은 체크한 그룹에서만 허용되며, AI 답변은 별도 승인 후에만 전송됩니다.</p>
   {notice&&<p className="nxBackupMessage" role="status">{notice}</p>}
  </section>;
