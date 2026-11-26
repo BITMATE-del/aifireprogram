@@ -3,8 +3,8 @@ import {database} from "./workspace-db";
 
 const context="moment-studio-credentials-v1";
 function encryptionKey():Buffer{
- const secret=process.env.AUTH_SECRET;
- if(!secret||secret.length<32)throw new Error("AUTH_SECRET_TOO_SHORT_FOR_ENCRYPTION");
+ const secret=process.env.CREDENTIAL_ENCRYPTION_KEY;
+ if(!secret||secret.length<32)throw new Error("CREDENTIAL_ENCRYPTION_KEY_MISSING_OR_SHORT");
  return Buffer.from(hkdfSync("sha256",Buffer.from(secret),Buffer.from("moment-studio-credential-storage"),Buffer.from(context),32));
 }
 function encrypt(plain:string):string{
