@@ -25,6 +25,13 @@ export async function bridgeDatabase(){
    )`);
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS idempotency_key text");
    await db.query("CREATE UNIQUE INDEX IF NOT EXISTS moment_outbox_idempotency ON moment_group_outbox(idempotency_key) WHERE idempotency_key IS NOT NULL");
+   await db.query(`CREATE TABLE IF NOT EXISTS moment_discovered_groups(
+     account_id text NOT NULL,
+     chat_id text NOT NULL,
+     title text NOT NULL DEFAULT '',
+     discovered_at timestamptz NOT NULL DEFAULT now(),
+     PRIMARY KEY(account_id,chat_id)
+   )`);
    await db.query("CREATE INDEX IF NOT EXISTS moment_inbox_chat_recent ON moment_group_inbox(chat_id,id DESC)");
    await db.query("CREATE INDEX IF NOT EXISTS moment_outbox_account_status ON moment_group_outbox(account_id,status,id)");
   })().catch(err=>{initialized=null;throw err});
