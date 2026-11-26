@@ -29,6 +29,11 @@ export async function autoDb(){
      CHECK(status IN ('processing','queued','skipped','failed','cancelled'))
    )`);
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS source_type text NOT NULL DEFAULT 'manual'");
+   await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS not_before timestamptz NOT NULL DEFAULT now()");
+   await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS decision_reason text");
+   await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS selected_accounts text[]");
+   await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS decision_type text");
+   await db.query("CREATE INDEX IF NOT EXISTS moment_outbox_due ON moment_group_outbox(chat_id,account_id,not_before) WHERE status='pending'");
    await db.query("CREATE INDEX IF NOT EXISTS moment_auto_jobs_group_recent ON moment_auto_jobs(chat_id,id DESC)");
    await db.query("CREATE INDEX IF NOT EXISTS moment_auto_groups_enabled ON moment_auto_groups(enabled)");
   })();
