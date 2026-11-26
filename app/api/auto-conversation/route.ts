@@ -9,7 +9,13 @@ const reply=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:
 export async function GET(req:NextRequest){
  const chatId=safeChatId(req.nextUrl.searchParams.get("chatId"));
  if(!chatId||!(await isAllowedGroup(chatId)))return reply({error:"그룹이 허용되지 않았습니다."},403);
- try{return reply(await getAutoStatus(chatId))}
+ try{
+  const [state,db]=await Promise.all([getAutoStatus(chatId),autoDb()]);
+  const decisions=await db.query(`SELECT decision_type AS type,decision_reason AS reason,
+     selected_accounts AS accounts,status,completed_at,claimed_at
+     FROM moment_auto_jobs WHERE chat_id=$1 ORDER BY id DESC LIMIT 12`,[chatId]);
+  return reply({...state,decisions:decisions.rows});
+ }
  catch{return reply({error:"운영 상태를 조회하지 못했습니다."},503)}
 }
 export async function POST(req:NextRequest){
