@@ -47,7 +47,7 @@ export async function GET(req:NextRequest){
  if(!authorizedBridge(req))return reply({error:"인증 실패"},401);
  const accountId=safeAccountId(req.nextUrl.searchParams.get("accountId"));
  const chatId=safeChatId(req.nextUrl.searchParams.get("chatId"));
- if(!accountId||!chatId||!allowedChats().has(chatId))return reply({error:"계정·그룹 확인 실패"},403);
+ if(!accountId||!chatId||!(await isAllowedGroup(chatId)))return reply({error:"계정·그룹 확인 실패"},403);
  try{
   const db=await bridgeDatabase(),client=await db.connect();
   try{
