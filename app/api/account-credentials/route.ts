@@ -1,3 +1,4 @@
+import {sameSiteRequest} from "../../../lib/request-origin";
 import {NextRequest,NextResponse} from "next/server";
 import {credentialsStatus,saveCredential,credentialDatabase,type SecretName} from "../../../lib/credential-vault";
 export const runtime="nodejs";
@@ -12,8 +13,7 @@ export async function GET(req:NextRequest){
  catch{return json({error:"설정 상태를 읽을 수 없습니다. 서버 암호화 키와 DB 연결을 확인하세요."},503)}
 }
 export async function PATCH(req:NextRequest){
- const origin=req.headers.get("origin");
- if(origin&&origin!==req.nextUrl.origin)return json({error:"잘못된 요청 출처입니다."},403);
+ if(!sameSiteRequest(req))return json({error:"잘못된 요청 출처입니다."},403);
  try{
   const raw=await req.text();
   if(raw.length>12000)return json({error:"설정 용량을 초과했습니다."},413);
@@ -34,8 +34,7 @@ export async function PATCH(req:NextRequest){
 }
 
 export async function DELETE(req:NextRequest){
- const origin=req.headers.get("origin");
- if(origin&&origin!==req.nextUrl.origin)return json({error:"잘못된 요청 출처입니다."},403);
+ if(!sameSiteRequest(req))return json({error:"잘못된 요청 출처입니다."},403);
  let body:{accountId?:unknown};
  try{body=await req.json()}catch{return json({error:"잘못된 요청입니다."},400)}
  if(!validAccount(body.accountId))return json({error:"계정 ID를 확인하세요."},400);
