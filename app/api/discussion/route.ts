@@ -52,7 +52,8 @@ export async function POST(req:NextRequest){
     if(recent.rowCount)history=recent.rows.map((r:{speaker:string;text:string})=>({speaker:str(r.speaker,60),text:str(r.text,600)}));
    }catch{ /* keep manual test available if the real inbox is not ready */ }
   }
-  if(!topic||people.length<1)return NextResponse.json({error:"토론 주제와 발언 가능한 AI 페르소나 1명 이상이 필요합니다."},{status:400});
+  if(!groupId||!/^-?\d{1,20}$/.test(groupId)||!(await isAllowedGroup(groupId)))return NextResponse.json({error:"실제 연결이 허용된 텔레그램 그룹에서만 AI 대화가 가능합니다."},{status:403});
+  if(!topic||people.length<1)return NextResponse.json({error:"실제 그룹 메시지와 배정된 AI 페르소나가 필요합니다."},{status:400});
   const preferred=str(input?.credentialAccountId,120);
   const allowedAccounts=new Set(people.map(p=>p.accountId).filter(Boolean));
   const chosen=allowedAccounts.has(preferred)?preferred:people[0]?.accountId||"";
@@ -66,7 +67,7 @@ export async function POST(req:NextRequest){
    }catch{}
   }
   if(!key){key=process.env.OPENAI_API_KEY||null;billedAccountId=key?"__server_default__":"";}
-  if(!key){if(directorMode)return NextResponse.json({error:"OpenAI API 키 미등록: 자동 대화는 샘플 발언을 실제 그룹에 전송하지 않습니다."},{status:503});return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"등록된 계정별 OpenAI 키나 서버 기본 API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});}
+  if(!key)return NextResponse.json({error:"연결된 OpenAI API 키가 없습니다. 실제 AI 대화에는 계정별 키 또는 서버 기본 키가 필요합니다."},{status:503});
   if(billedAccountId){
    try{
     const budget=await checkAiBudget(billedAccountId);
