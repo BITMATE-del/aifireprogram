@@ -23,11 +23,18 @@ export default function ServerStoragePanel({state,onLoad}:Props){
    const serverText=data.state?serialize(data.state):"";
    lastSaved.current=serverText;setBaseline(serverText);
    // On reload, never silently push a different browser's data to server.
-   setAuto(localStorage.getItem("ace.autosave") === "on" && !!serverText && serverText===serialize(state));
+   if(data.exists&&data.state){
+    // Production always treats PostgreSQL as authoritative.
+    onLoad(data.state);
+    localStorage.setItem("ace.autosave","on");
+    setAuto(true);
+   }else{
+    setAuto(false);
+   }
   }catch(e){setStatus("unavailable");setAuto(false);setNotice(e instanceof Error?e.message:"서버 저장소 연결 실패");}
- // Initial server snapshot is deliberately checked only once. Further local edits are user-controlled.
+ // Load the current server snapshot before enabling production autosave.
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[fetchServer]);
+ },[fetchServer,onLoad]);
  useEffect(()=>{void refresh()},[refresh]);
  useEffect(()=>{
   function updateFromGroupSelection(event:Event){
@@ -39,6 +46,7 @@ export default function ServerStoragePanel({state,onLoad}:Props){
    lastSaved.current=serialize(detail.state);
    setBaseline(lastSaved.current);
    setNotice("선택한 그룹의 등록·배정이 서버에 즉시 저장됐습니다.");
+   setAuto(true);
   }
   window.addEventListener("moment:workspace-synced",updateFromGroupSelection);
   return()=>window.removeEventListener("moment:workspace-synced",updateFromGroupSelection);
@@ -55,6 +63,7 @@ export default function ServerStoragePanel({state,onLoad}:Props){
    syncedVersion.current=data.version;setVersion(data.version);
    setExists(true);setUpdated(data.updatedAt||"");
    lastSaved.current=serialize(value);setBaseline(lastSaved.current);
+   setAuto(true);
    if(!silent)setNotice("현재 설정을 서버에 저장했습니다.");
   }catch(e){
    setAuto(false);localStorage.removeItem("ace.autosave");
@@ -63,12 +72,12 @@ export default function ServerStoragePanel({state,onLoad}:Props){
  }
  async function save(){
   if(busy.current||status!=="ready")return;
-  if(exists&&!confirm("현재 브라우저 설정을 서버에 저장합니다. 다른 브라우저의 변경사항이 있다면 충돌 검사로 저장을 거부합니다. 계속할까요?"))return;
+
   await persist(state);
  }
  async function load(){
   if(busy.current||!exists)return;
-  if(!confirm("서버 저장본으로 브라우저의 현재 설정을 교체합니다. 브라우저의 미저장 변경은 사라집니다. 계속할까요?"))return;
+
   busy.current=true;setWorking(true);
   try{
    const data=await fetchServer();
@@ -98,13 +107,13 @@ export default function ServerStoragePanel({state,onLoad}:Props){
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[auto,status,serialize(state),baseline]);
  return <section className="nxPanel nxUnderPanel">
-  <div className="nxPanelHeading"><div><h2>PostgreSQL 서버 저장</h2><p>계정·그룹·페르소나·대화를 안전하게 보존합니다.</p></div></div>
+  <div className="nxPanelHeading"><div><h2>실제 운영 데이터</h2><p>서버를 기준으로 계정·그룹·페르소나 설정을 자동 동기화합니다.</p></div></div>
   <div className="nxBackupNote"><Database size={16}/> {status==="checking"?"서버 확인 중":status==="ready"?exists?"서버 저장본 있음 · 버전 "+version:"서버 연결됨 · 저장된 설정 없음":"서버 저장 기능 연결 실패"}{updated?" · "+new Date(updated).toLocaleString("ko-KR"):""}</div>
   <div className="nxBackupActions"><button disabled={working||status!=="ready"} onClick={save}><Save size={16}/> 현재 설정 서버 저장</button>
   <button disabled={working||status!=="ready"||!exists} onClick={load}><Download size={16}/> 서버 설정 불러오기</button>
   <button disabled={working} onClick={()=>void refresh()}><RefreshCw size={16}/> 상태 새로고침</button></div>
-  <label className="nxAutoSaveControl"><input type="checkbox" checked={auto} onChange={e=>toggleAuto(e.target.checked)}/><span><strong>변경사항 자동 저장</strong><small>최초 저장·불러오기 후 활성화 가능. 다른 브라우저와 충돌하면 중단됩니다.</small></span><b>{auto?"사용 중":"꺼짐"}</b></label>
-  <p className="nxTip">자동 저장은 켠 브라우저에서만 작동하며, 서버 설정과 일치하는 상태에서 시작합니다. 계정 API 비밀키는 별도 암호화 저장되므로 포함되지 않습니다.</p>
+  <p className="nxTip">{auto?"변경사항 자동 저장이 활성화되어 있습니다.":"서버 연결 및 최초 저장이 필요합니다."} 다른 화면에서 수정된 버전이 있으면 덮어쓰지 않고 오류를 표시합니다.</p>
+
   {notice&&<p className="nxBackupMessage" role="status">{notice}</p>}
  </section>;
 }
