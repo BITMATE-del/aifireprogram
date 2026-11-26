@@ -115,12 +115,34 @@ export async function POST(req:NextRequest){
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
   const normalize=(v:string)=>v.toLowerCase().replace(/[\\s\\p{P}\\p{S}]/gu,"");
   const seen=new Set(history.slice(-10).map(x=>normalize(x.text)));
+  const decodeSpeaker=(raw:unknown):Persona|undefined=>{
+    const label=str(raw,140).trim();
+    if(!label)return speakers.length===1?speakers[0]:undefined;
+    const normalized=label.replace(/^[#"'\s]+|[#"'\s]+$/g,"").toUpperCase();
+    // Models sometimes write "P1", "p1", "1", or "speaker_P1".
+    const simple=/^(?:SPEAKER[_\s-]*)?P?0*(\d{1,2})$/.exec(normalized);
+    if(simple){
+      const index=Number(simple[1])-1;
+      if(index>=0&&index<speakers.length)return speakers[index];
+    }
+    const exact=roster.findIndex((p,i)=>p.speakerId===normalized||speakers[i].id===label);
+    if(exact>=0)return speakers[exact];
+    const names=speakers.filter(p=>p.name===label||normalize(p.name)===normalize(label));
+    if(names.length===1)return names[0];
+    const accounts=speakers.filter(p=>p.accountId===label);
+    if(accounts.length===1)return accounts[0];
+    // A single non-observer account is unambiguous even when the model uses
+    // its visible nickname instead of an ID. Never guess for multiple accounts.
+    return speakers.length===1?speakers[0]:undefined;
+  };
   let rejectedSpeaker=0,rejectedRepeat=0,rejectedEmpty=0;
   const rawTurns=Array.isArray(parsed.turns)?parsed.turns:[];
   const turns:Turn[]=rawTurns.slice(0,3).flatMap(t=>{
-    const label=str(t.speakerId,80),message=str(t.text,700);
-    const matching=idFromSlot.get(label)||speakers.find(p=>p.id===label);
+    if(!t||typeof t!=="object"){rejectedEmpty++;return [];}
+    const reply=t as {speakerId?:unknown;speaker?:unknown;name?:unknown;text?:unknown;message?:unknown;content?:unknown};
+    const matching=decodeSpeaker(reply.speakerId??reply.speaker??reply.name);
     if(!matching){rejectedSpeaker++;return [];}
+    const message=str(reply.text??reply.message??reply.content,700);
     if(!message){rejectedEmpty++;return [];}
     if(seen.has(normalize(message))){rejectedRepeat++;return [];}
     seen.add(normalize(message));
