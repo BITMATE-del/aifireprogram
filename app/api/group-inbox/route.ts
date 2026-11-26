@@ -1,13 +1,13 @@
 import {createHash} from "node:crypto";
 import {sameSiteRequest} from "../../../lib/request-origin";
 import {NextRequest,NextResponse} from "next/server";
-import {allowedChats,bridgeDatabase,flagUnconfirmedSends,safeAccountId,safeChatId} from "../../../lib/group-bridge";
+import {isAllowedGroup,bridgeDatabase,flagUnconfirmedSends,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const answer=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{"Cache-Control":"no-store"}});
 export async function GET(req:NextRequest){
  const chatId=safeChatId(req.nextUrl.searchParams.get("chatId"));
- if(!chatId||!allowedChats().has(chatId))return answer({connected:false,messages:[],drafts:[],error:"그룹 ID가 허용 목록에 등록되어 있지 않습니다."},200);
+ if(!chatId||!(await isAllowedGroup(chatId)))return answer({connected:false,messages:[],drafts:[],error:"그룹 ID가 허용 목록에 등록되어 있지 않습니다."},200);
  try{
   await flagUnconfirmedSends();
   const db=await bridgeDatabase();
