@@ -65,7 +65,7 @@ export async function GET(req:NextRequest){
  }finally{client.release();}
  if(!candidate||!persona||!assignment||!jobId)return respond({active:true,idle:"no_work"});
  try{
-  const input={groupId,topic:candidate.body,humanMessage:candidate.body,inboxMessageId:candidate.id,
+  const input={groupId:chatId,topic:candidate.body,humanMessage:candidate.body,inboxMessageId:candidate.id,
     credentialAccountId:accountId,
     personas:[{...persona,id:accountId+"::"+chatId,accountId,participationRole:assignment.mode}]};
   const internalReq=new NextRequest("https://internal.moment.invalid/api/discussion",{
