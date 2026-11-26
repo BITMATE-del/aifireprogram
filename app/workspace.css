@@ -62,3 +62,19 @@
 .nxCredentialTest{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding-top:15px}
 .nxCredentialTest>button{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;background:#eff9f3;border:1px solid #b7d8ca;border-radius:8px;color:#267868;font-size:12px;font-weight:800}
 .nxCredentialTest>span{font-size:11px;color:#83969e}
+
+/* Global provider defaults — consistent with modular API workspace */
+.nxGlobalDefaults{display:grid;gap:18px}
+.nxGlobalHeading{display:flex;align-items:center;gap:13px}
+.nxGlobalHeading>div:nth-child(2){flex:1;min-width:0}
+.nxGlobalHeading h3{font-size:17px;margin:0 0 4px;color:#253d49}
+.nxGlobalHeading p{margin:0;color:#79939c;font-size:12px;line-height:1.7}
+.nxGlobalIcon{display:grid;place-items:center;background:#e5f4ee;color:#18806b;border-radius:12px;width:45px;height:45px;flex-shrink:0}
+.nxGlobalGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.nxGlobalField{border:1px solid #e3ebed;background:#fcfefd;border-radius:10px;padding:17px;min-width:0}
+.nxGlobalField p{font-size:11px;color:#8697a1;margin:6px 0 12px}
+.nxGlobalInfo{display:flex;align-items:flex-start;gap:10px;background:#f0f7f4;border:1px solid #dbece3;border-radius:9px;padding:14px;color:#537e73;font-size:12px}
+.nxGlobalInfo svg{flex-shrink:0;margin-top:2px}
+.nxGlobalInfo p{margin:0;line-height:1.75}
+@media(max-width:930px){.nxGlobalGrid{grid-template-columns:1fr}}
+@media(max-width:700px){.nxGlobalHeading{flex-wrap:wrap}.nxGlobalHeading>.nxCredentialSecure{margin-left:57px}.nxApiTabs{overflow-x:auto}.nxApiTabs button{white-space:nowrap}}
