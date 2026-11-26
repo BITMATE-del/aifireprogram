@@ -42,7 +42,7 @@ export async function POST(req:NextRequest){
   // Operator approval; never infer approval from AI generation alone.
   const key=createHash("sha256").update(JSON.stringify([accountId,chatId,messageId,text])).digest("hex");
   const result=await db.query(`INSERT INTO moment_group_outbox(account_id,chat_id,reply_to_message_id,body,idempotency_key)
-    VALUES($1,$2,$3,$4,$5) ON CONFLICT(idempotency_key) DO NOTHING RETURNING id,status`,[accountId,chatId,messageId,text,key]);
+    VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING id,status`,[accountId,chatId,messageId,text,key]);
   if(!result.rows.length)return answer({error:"동일 계정·원본 메시지·답변의 전송 승인이 이미 존재합니다. 중복 발송하지 않았습니다.",code:"DUPLICATE_APPROVAL"},409);
   return answer({ok:true,id:result.rows[0].id,status:result.rows[0].status});
  }catch{return answer({error:"전송 승인 저장에 실패했습니다."},503);}
