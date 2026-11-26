@@ -2,10 +2,13 @@ import {createCipheriv,createDecipheriv,hkdfSync,randomBytes} from "node:crypto"
 import {database} from "./workspace-db";
 
 const context="moment-studio-credentials-v1";
+function deriveKey(secret:string):Buffer{
+ return Buffer.from(hkdfSync("sha256",Buffer.from(secret),Buffer.from("moment-studio-credential-storage"),Buffer.from(context),32));
+}
 function encryptionKey():Buffer{
  const secret=process.env.CREDENTIAL_ENCRYPTION_KEY;
  if(!secret||secret.length<32)throw new Error("CREDENTIAL_ENCRYPTION_KEY_MISSING_OR_SHORT");
- return Buffer.from(hkdfSync("sha256",Buffer.from(secret),Buffer.from("moment-studio-credential-storage"),Buffer.from(context),32));
+ return deriveKey(secret);
 }
 export function encryptTransientSecret(plain:string):string{
  const iv=randomBytes(12);
@@ -13,12 +16,24 @@ export function encryptTransientSecret(plain:string):string{
  const encrypted=Buffer.concat([cipher.update(plain,"utf8"),cipher.final()]);
  return ["v1",iv.toString("base64url"),cipher.getAuthTag().toString("base64url"),encrypted.toString("base64url")].join(".");
 }
-export function decryptTransientSecret(value:string):string{
+function decryptWithKey(value:string,key:Buffer):string{
  const [v,iv,tag,blob]=value.split(".");
  if(v!=="v1"||!iv||!tag||!blob)throw new Error("INVALID_ENCRYPTED_SECRET");
- const decipher=createDecipheriv("aes-256-gcm",encryptionKey(),Buffer.from(iv,"base64url"));
+ const decipher=createDecipheriv("aes-256-gcm",key,Buffer.from(iv,"base64url"));
  decipher.setAuthTag(Buffer.from(tag,"base64url"));
  return Buffer.concat([decipher.update(Buffer.from(blob,"base64url")),decipher.final()]).toString("utf8");
+}
+export function decryptTransientSecret(value:string):string{
+ try{return decryptWithKey(value,encryptionKey());}
+ catch(primaryError){
+  // Read-only compatibility with records written before a dedicated key existed.
+  // Never print or return secret material on failure.
+  const old=process.env.AUTH_SECRET;
+  if(old&&old.length>=32&&old!==process.env.CREDENTIAL_ENCRYPTION_KEY){
+   try{return decryptWithKey(value,deriveKey(old));}catch{}
+  }
+  throw primaryError;
+ }
 }
 
 let prepared:Promise<void>|null=null;
