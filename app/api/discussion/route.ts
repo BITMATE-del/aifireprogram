@@ -4,10 +4,10 @@ import {recordUsage} from "../../../lib/ai-usage";
 import {checkAiBudget} from "../../../lib/ai-budget";
 import {isAllowedGroup,bridgeDatabase} from "../../../lib/group-bridge";
 export const runtime="nodejs";
-type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
+type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer";frequency:"quiet"|"balanced"|"active";responseMode:"reactive"|"balanced"|"independent";interests:string};
 type Turn={speakerId:string;speaker:string;text:string};
 function str(v:unknown,max=500){return typeof v==="string"?v.trim().slice(0,max):""}
-function personasOf(v:unknown):Persona[]{if(!Array.isArray(v))return [];return v.slice(0,20).filter(p=>p&&typeof p==="object"&&typeof p.id==="string"&&typeof p.name==="string").map(p=>({id:str(p.id,80),name:str(p.name,60),role:str(p.role,120),style:str(p.style,1200),risk:typeof p.risk==="number"?Math.max(0,Math.min(100,p.risk)):50,accountId:str(p.accountId,120),participationRole:p.participationRole==="expert"?"expert":p.participationRole==="observer"?"observer":"member"}));}
+function personasOf(v:unknown):Persona[]{if(!Array.isArray(v))return [];return v.slice(0,20).filter(p=>p&&typeof p==="object"&&typeof p.id==="string"&&typeof p.name==="string").map(p=>({id:str(p.id,80),name:str(p.name,60),role:str(p.role,120),style:str(p.style,1200),risk:typeof p.risk==="number"?Math.max(0,Math.min(100,p.risk)):50,accountId:str(p.accountId,120),participationRole:p.participationRole==="expert"?"expert":p.participationRole==="observer"?"observer":"member",frequency:p.frequency==="quiet"?"quiet":p.frequency==="active"?"active":"balanced",responseMode:p.responseMode==="reactive"?"reactive":p.responseMode==="independent"?"independent":"balanced",interests:str(p.interests,250)}));}
 function sample(topic:string,people:Persona[],human:string):Turn[]{
  const order=[...people].filter(p=>p.participationRole!=="observer").sort((a,b)=>Number(a.participationRole==="expert")-Number(b.participationRole==="expert"));
  const entries=order.slice(0,Math.min(4,order.length));
@@ -76,7 +76,7 @@ export async function POST(req:NextRequest){
   const speakers=people.filter(p=>p.participationRole!=="observer");
   if(!speakers.length)return NextResponse.json({error:"이 그룹의 모든 AI 계정이 관망 모드입니다. 최소 한 계정의 역할을 일반 참여자 또는 전문가로 변경하세요.",code:"NO_ACTIVE_SPEAKER"},{status:400});
   const roster=speakers.map((p,i)=>({speakerId:"P"+(i+1),name:p.name,role:p.role,style:p.style,risk:p.risk,
-    participationRole:p.participationRole,activity:p.participationRole==="expert"?"정보가 꼭 필요할 때만":"대화 가치가 있을 때만"}));
+    participationRole:p.participationRole,frequency:p.frequency,responseMode:p.responseMode,interests:p.interests,activity:p.participationRole==="expert"?"정보가 꼭 필요할 때만":"대화 가치가 있을 때만"}));
   const idFromSlot=new Map(roster.map((p,i)=>[p.speakerId,speakers[i]]));
   const directorInstructions=directorMode?[
     "모든 메시지에 반응할 필요는 없습니다. 전체 문맥을 먼저 읽고 정말 도움이 될 때만 speak=true로 판단합니다.",
@@ -84,6 +84,8 @@ export async function POST(req:NextRequest){
     "상황에 맞는 한 명만 우선 선택하고, 서로 다른 근거가 유용한 경우에만 2명까지 허용합니다. 같은 계정의 연속 발언을 피합니다.",
     "응답의 목적은 정보를 보태거나 질문을 명확히 하는 것입니다. 대화를 억지로 지속하거나 질문으로 끝내려 하지 않습니다.",
     "인간의 대화 주도권을 우선합니다. 문장은 어색한 요약·교과서식 안내·상투적 맞장구를 피하고, 각 페르소나 말투와 길이를 구별합니다.",
+    "frequency=quiet인 계정은 매우 드물게, active는 관련 주제에 조금 더 적극적으로, balanced는 중간 정도로 참여합니다. 어떤 성격도 반드시 말해야 하는 것은 아닙니다.",
+    "responseMode=reactive는 사람 발언에 대한 자연스러운 반응, independent는 별도 관점 제시, balanced는 상황에 맞게 선택합니다. interests는 관련성 판단에 활용합니다.",
     "문장에 인위적 오타를 넣거나 사람이 실제로 한 거래·경험을 AI가 한 것처럼 쓰지 않습니다.",
     "명시적으로 말할 필요가 없다면 decision=\"silent\", turns=[]를 반환합니다. 필요할 때 decision=\"reply\"를 반환합니다.",
     '출력 JSON: {"decision":"silent|reply","reason":"운영자가 볼 짧은 한국어 근거","turns":[{"speakerId":"P1","text":"발언"}]}'
