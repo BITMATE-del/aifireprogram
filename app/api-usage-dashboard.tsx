@@ -2,6 +2,7 @@
 import {useEffect,useState} from "react";
 import {Activity,ArrowUpRight,BarChart3,BrainCircuit,CheckCircle2,Clock3,KeyRound,RefreshCw,ShieldCheck,Wallet} from "lucide-react";
 import AccountCredentials from "./account-credentials";
+import DefaultCredentials from "./default-credentials";
 
 type Account={id:string;name:string;enabled:boolean};
 type Totals={requests:number;prompt_tokens:string;completion_tokens:string;cached_tokens:string;estimated_usd:number;unknown_cost_requests:number};
@@ -15,7 +16,7 @@ const usd=(n:number|undefined)=>"$"+num(n).toFixed(6);
 export default function ApiUsageDashboard({accounts,selectedAccount,onSelect}:{
  accounts:Account[];selectedAccount:string;onSelect:(id:string)=>void
 }){
- const [tab,setTab]=useState<"keys"|"usage">("keys");
+ const [tab,setTab]=useState<"defaults"|"keys"|"usage">("defaults");
  const [usage,setUsage]=useState<Usage|null>(null);
  const [loading,setLoading]=useState(false),[error,setError]=useState("");
  const [scope,setScope]=useState("all");
@@ -32,13 +33,14 @@ export default function ApiUsageDashboard({accounts,selectedAccount,onSelect}:{
  useEffect(()=>{if(tab==="usage")void query(scope);},[tab,scope]);
  const max=Math.max(.000001,...(usage?.days||[]).map(x=>num(x.estimated_usd)));
  return <div className="nxApiWorkspace">
-   <div className="nxApiHeader"><div><div className="nxApiEyebrow"><ShieldCheck size={15}/> 내 계정 API 설정</div><h2>API 연결 및 사용량 관리</h2><p>Telegram 계정별 로그인 정보와 GPT API 키를 등록하고, 실제 사용한 토큰·비용을 확인합니다.</p></div></div>
-   <div className="nxApiTabs"><button className={tab==="keys"?"active":""} onClick={()=>setTab("keys")}><KeyRound size={17}/> 계정별 API 고정</button><button className={tab==="usage"?"active":""} onClick={()=>setTab("usage")}><BarChart3 size={17}/> 토큰·사용금액</button></div>
+   <div className="nxApiHeader"><div><div className="nxApiEyebrow"><ShieldCheck size={15}/> 내 계정 API 설정</div><h2>API 연결 및 사용량 관리</h2><p>공통 API는 한 번만 등록하고, 계정별 예외만 설정하세요. 사용한 토큰과 비용도 확인할 수 있습니다.</p></div></div>
+   <div className="nxApiTabs"><button className={tab==="defaults"?"active":""} onClick={()=>setTab("defaults")}><ShieldCheck size={17}/> 전체 기본 설정</button><button className={tab==="keys"?"active":""} onClick={()=>setTab("keys")}><KeyRound size={17}/> 계정별 개별 설정</button><button className={tab==="usage"?"active":""} onClick={()=>setTab("usage")}><BarChart3 size={17}/> 토큰·사용금액</button></div>
+   {tab==="defaults"&&<DefaultCredentials/>}
    {tab==="keys"&&<div className="nxApiKeyLayout">
     <section className="nxPanel nxApiAccountList"><div className="nxPanelHeading"><div><h2>등록 계정 <small>{accounts.length}</small></h2><p>설정하려는 계정을 선택하세요.</p></div></div>
       {accounts.length?accounts.map(a=><button key={a.id} className={"nxAccountSelect "+(selectedAccount===a.id?"selected":"")} onClick={()=>onSelect(a.id)}><span className="nxAvatar">{a.name.slice(0,1)}</span><span><strong>{a.name}</strong><small>{a.enabled===false?"비활성":"활성"} · 계정별 독립 API</small></span>{selectedAccount===a.id&&<CheckCircle2 size={18}/>}</button>):<div className="nxEmpty">계정 관리에서 계정을 먼저 등록하세요.</div>}
     </section>
-    <section className="nxPanel nxApiKeyEditor">{selectedAccount?<AccountCredentials key={selectedAccount} accountId={selectedAccount}/>:<div className="nxApiEmpty"><KeyRound size={29}/><strong>API를 등록할 계정을 선택하세요</strong><p>계정마다 Telegram API ID·HASH·세션과 OpenAI 키를 개별 저장할 수 있습니다.</p></div>}</section>
+    <section className="nxPanel nxApiKeyEditor">{selectedAccount?<AccountCredentials key={selectedAccount} accountId={selectedAccount}/>:<div className="nxApiEmpty"><KeyRound size={29}/><strong>API를 등록할 계정을 선택하세요</strong><p>Telegram API ID·HASH·OpenAI 키는 기본값을 상속하고, 각 계정은 고유 세션과 필요한 개별값만 저장합니다.</p></div>}</section>
    </div>}
    {tab==="usage"&&<div className="nxUsageContent">
     <div className="nxUsageFilters"><label>조회 계정<select value={scope} onChange={e=>setScope(e.target.value)}><option value="all">전체 계정</option><option value="__server_default__">서버 기본 API 키</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><button onClick={()=>void query(scope)} disabled={loading}><RefreshCw size={15}/>{loading?"조회 중":"새로고침"}</button></div>
