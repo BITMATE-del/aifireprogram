@@ -32,6 +32,12 @@ export async function bridgeDatabase(){
      discovered_at timestamptz NOT NULL DEFAULT now(),
      PRIMARY KEY(account_id,chat_id)
    )`);
+   await db.query(`CREATE TABLE IF NOT EXISTS moment_group_approvals(
+     account_id text NOT NULL,
+     chat_id text NOT NULL,
+     approved_at timestamptz NOT NULL DEFAULT now(),
+     PRIMARY KEY(account_id,chat_id)
+   )`);
    await db.query("CREATE INDEX IF NOT EXISTS moment_inbox_chat_recent ON moment_group_inbox(chat_id,id DESC)");
    await db.query("CREATE INDEX IF NOT EXISTS moment_outbox_account_status ON moment_group_outbox(account_id,status,id)");
   })().catch(err=>{initialized=null;throw err});
@@ -69,4 +75,21 @@ export async function flagUnconfirmedSends(){
   SET status='failed',last_error='전송 결과 미확인: 텔레그램에서 실제 발송 여부를 확인한 후 처리하세요.',
       completed_at=now()
   WHERE status='sending' AND claimed_at<now()-interval '3 minutes'`);
+}
+
+/** Explicitly checked groups are trusted for this account, even if absent from env.
+ * The existing environment allowlist continues to work for older saved groups.
+ */
+export async function allowedChatsForAccount(accountId:string):Promise<Set<string>>{
+ const allowed=allowedChats();
+ const db=await bridgeDatabase();
+ const result=await db.query("SELECT chat_id FROM moment_group_approvals WHERE account_id=$1",[accountId]);
+ for(const row of result.rows)allowed.add(String(row.chat_id));
+ return allowed;
+}
+export async function isAllowedGroup(chatId:string):Promise<boolean>{
+ if(allowedChats().has(chatId))return true;
+ const db=await bridgeDatabase();
+ const r=await db.query("SELECT 1 FROM moment_group_approvals WHERE chat_id=$1 LIMIT 1",[chatId]);
+ return Boolean(r.rowCount);
 }
