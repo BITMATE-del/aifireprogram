@@ -1,6 +1,6 @@
 import {sameSiteRequest} from "../../../lib/request-origin";
 import {NextRequest,NextResponse} from "next/server";
-import {credentialsStatus,saveCredential,credentialDatabase,type SecretName} from "../../../lib/credential-vault";
+import {credentialsStatus,saveCredential,credentialDatabase,defaultCredentialStatus,DEFAULT_ACCOUNT_ID,type SecretName} from "../../../lib/credential-vault";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const names=new Set<SecretName>(["telegramApiId","telegramApiHash","telegramSession","openaiApiKey"]);
@@ -8,8 +8,17 @@ const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"C
 const validAccount=(v:unknown)=>typeof v==="string"&&v.trim().length>0&&v.length<=120&&!/[\x00-\x1F]/.test(v);
 export async function GET(req:NextRequest){
  const accountId=req.nextUrl.searchParams.get("accountId");
- if(!validAccount(accountId))return json({error:"계정을 선택해 주세요."},400);
- try{return json({accountId,status:await credentialsStatus(accountId!)})}
+ if(!validAccount(accountId)||accountId===DEFAULT_ACCOUNT_ID)return json({error:"계정을 선택해 주세요."},400);
+ try{
+  const [status,defaults]=await Promise.all([credentialsStatus(accountId!),defaultCredentialStatus()]);
+  const sources={
+   telegramApiId:status.telegramApiId?"custom":defaults.telegramApiId?"default":"none",
+   telegramApiHash:status.telegramApiHash?"custom":defaults.telegramApiHash?"default":"none",
+   telegramSession:status.telegramSession?"custom":"none",
+   openaiApiKey:status.openaiApiKey?"custom":defaults.openaiApiKey?"default":"none"
+  };
+  return json({accountId,status,sources,defaults});
+ }
  catch{return json({error:"설정 상태를 읽을 수 없습니다. 서버 암호화 키와 DB 연결을 확인하세요."},503)}
 }
 export async function PATCH(req:NextRequest){
@@ -18,7 +27,7 @@ export async function PATCH(req:NextRequest){
   const raw=await req.text();
   if(raw.length>12000)return json({error:"설정 용량을 초과했습니다."},413);
   const input=JSON.parse(raw) as {accountId?:unknown;field?:unknown;value?:unknown};
-  if(!validAccount(input.accountId)||!names.has(input.field as SecretName))return json({error:"잘못된 계정 또는 설정 항목입니다."},400);
+  if(!validAccount(input.accountId)||input.accountId===DEFAULT_ACCOUNT_ID||!names.has(input.field as SecretName))return json({error:"잘못된 계정 또는 설정 항목입니다."},400);
   const field=input.field as SecretName;
   const value=input.value;
   if(value!==null&&(typeof value!=="string"||!value.trim()||value.length>8000))return json({error:"값을 확인해주세요."},400);
@@ -29,7 +38,13 @@ export async function PATCH(req:NextRequest){
    if(field==="openaiApiKey"&&!/^sk-[\w-]{12,}$/.test(value.trim()))return json({error:"OpenAI API 키 형식을 확인하세요."},400);
   }
   await saveCredential(input.accountId as string,field,typeof value==="string"?value.trim():null);
-  return json({ok:true,status:await credentialsStatus(input.accountId as string)});
+  const [status,defaults]=await Promise.all([credentialsStatus(input.accountId as string),defaultCredentialStatus()]);
+  return json({ok:true,status,defaults,sources:{
+   telegramApiId:status.telegramApiId?"custom":defaults.telegramApiId?"default":"none",
+   telegramApiHash:status.telegramApiHash?"custom":defaults.telegramApiHash?"default":"none",
+   telegramSession:status.telegramSession?"custom":"none",
+   openaiApiKey:status.openaiApiKey?"custom":defaults.openaiApiKey?"default":"none"
+  }});
  }catch{return json({error:"저장하지 못했습니다. 서버 DB 또는 암호화 설정을 확인하세요."},503)}
 }
 
@@ -37,7 +52,7 @@ export async function DELETE(req:NextRequest){
  if(!sameSiteRequest(req))return json({error:"잘못된 요청 출처입니다."},403);
  let body:{accountId?:unknown};
  try{body=await req.json()}catch{return json({error:"잘못된 요청입니다."},400)}
- if(!validAccount(body.accountId))return json({error:"계정 ID를 확인하세요."},400);
+ if(!validAccount(body.accountId)||body.accountId===DEFAULT_ACCOUNT_ID)return json({error:"계정 ID를 확인하세요."},400);
  try{
   const db=await credentialDatabase();
   await db.query("DELETE FROM moment_account_credentials WHERE account_id=$1",[body.accountId]);
