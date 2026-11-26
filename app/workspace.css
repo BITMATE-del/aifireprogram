@@ -96,3 +96,11 @@
 .nxTelegramConnected strong,.nxTelegramConnected small{display:block}.nxTelegramConnected small{font-size:11px;margin-top:4px}
 .nxTelegramSecurity{display:flex;gap:8px;align-items:flex-start;color:#869aa1;font-size:11px;line-height:1.75}
 .nxTelegramSecurity svg{flex-shrink:0;margin-top:2px}
+
+.nxAutoSaveControl{display:flex;align-items:center;gap:12px;border:1px solid #dae9df;background:#f3faf6;padding:14px;border-radius:9px;margin-top:17px;color:#346c5c;cursor:pointer}
+.nxAutoSaveControl input{width:17px;height:17px;flex-shrink:0}.nxAutoSaveControl span{flex:1;display:grid;gap:3px}.nxAutoSaveControl strong{font-size:12px}.nxAutoSaveControl small{font-size:11px;color:#789188}.nxAutoSaveControl>b{font-size:11px}
+.nxConnectionSummary{border:1px solid #dcebe4;border-radius:10px;background:#f8fbf9;padding:15px;margin-top:14px;display:grid;gap:10px}
+.nxConnectionHeader{display:flex;align-items:center;justify-content:space-between;gap:8px}.nxConnectionHeader strong,.nxConnectionHeader button{display:flex;align-items:center;gap:7px;font-size:12px}.nxConnectionHeader button{border:1px solid #deebe5;background:white;padding:7px 9px;border-radius:7px;color:#547f72}
+.nxConnectionState{display:flex;align-items:center;gap:9px;color:#217969;font-size:14px}.nxConnectionDetails{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.nxConnectionDetails span{display:flex;justify-content:space-between;background:white;padding:10px;border-radius:7px;font-size:11px;color:#688580}.nxConnectionDetails b{color:#326f64}
+.nxConnectionSummary p,.nxConnectionSummary small{margin:0;font-size:11px;color:#78938f}
+@media(max-width:600px){.nxConnectionDetails{grid-template-columns:1fr}}
