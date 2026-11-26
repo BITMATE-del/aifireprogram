@@ -1,4 +1,6 @@
 import {NextRequest,NextResponse} from "next/server";
+import {accountSecret} from "../../../lib/credential-vault";
+export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
 type Turn={speakerId:string;speaker:string;text:string};
 function str(v:unknown,max=500){return typeof v==="string"?v.trim().slice(0,max):""}
@@ -23,8 +25,13 @@ export async function POST(req:NextRequest){
   const topic=str(input?.topic,1200),human=str(input?.humanMessage,1200),people=personasOf(input?.personas);
   const history=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
   if(!topic||people.length<1)return NextResponse.json({error:"토론 주제와 발언 가능한 AI 페르소나 1명 이상이 필요합니다."},{status:400});
-  const key=process.env.OPENAI_API_KEY;
-  if(!key)return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});
+  const accountIds=Array.from(new Set(people.map(p=>p.accountId).filter(Boolean)));
+  const preferred=str(input?.credentialAccountId,120);
+  const lookupIds=preferred?[preferred,...accountIds.filter(x=>x!==preferred)]:accountIds;
+  let key:string|null=null;
+  for(const accountId of lookupIds){try{key=await accountSecret(accountId,"openaiApiKey")}catch{}if(key)break;}
+  key=key||process.env.OPENAI_API_KEY||null;
+  if(!key)return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"등록된 계정별 OpenAI 키나 서버 기본 API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});
   const description=[
     "당신은 비공개 AI 투자 커뮤니티 시뮬레이션의 대화 디렉터입니다.",
     "입력된 사람의 발언이 있다면 그 내용을 핵심으로 삼아 일반 참여자들의 후속 반응을 만드세요.",
