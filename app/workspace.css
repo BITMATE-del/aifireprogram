@@ -58,3 +58,7 @@
 .nxUsageTableWrap{overflow-x:auto}.nxUsageTable{width:100%;border-collapse:collapse;min-width:610px;text-align:left}.nxUsageTable th{background:#f5f8f9;color:#6f8893;font-weight:800;font-size:11px;padding:12px}.nxUsageTable td{padding:13px 12px;border-bottom:1px solid #e7ecee;font-size:12px;color:#45606d}.nxUsageTable td:last-child{font-weight:800;color:#2c756c}
 .nxUsageDisclaimer{border:1px solid #dbe9e4;background:#eef6f2;padding:15px 17px;border-radius:10px;color:#557e78;display:flex;gap:12px;align-items:flex-start}.nxUsageDisclaimer svg{flex-shrink:0}.nxUsageDisclaimer p{font-size:11px;margin:0;line-height:1.8}.nxUsageDisclaimer a{color:#18776d;font-weight:800;display:inline-flex;align-items:center;gap:3px}
 @media(max-width:1150px){.nxUsageCards{grid-template-columns:repeat(2,1fr)}.nxUsagePanels{grid-template-columns:1fr}}@media(max-width:900px){.nxApiKeyLayout{grid-template-columns:1fr}}@media(max-width:690px){.nxApiTabs button{font-size:12px;padding:10px}.nxUsageCards{grid-template-columns:1fr 1fr;gap:8px}.nxUsageCards>div{padding:14px}.nxUsageCards strong{font-size:19px}.nxUsageFilters{flex-wrap:wrap}.nxUsageBarRow{grid-template-columns:39px minmax(0,1fr) 87px}}
+
+.nxCredentialTest{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding-top:15px}
+.nxCredentialTest>button{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;background:#eff9f3;border:1px solid #b7d8ca;border-radius:8px;color:#267868;font-size:12px;font-weight:800}
+.nxCredentialTest>span{font-size:11px;color:#83969e}
