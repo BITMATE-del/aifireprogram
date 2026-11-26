@@ -16,6 +16,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
  const [visible,setVisible]=useState<Record<Field,boolean>>({telegramApiId:false,telegramApiHash:false,telegramSession:false,openaiApiKey:false});
  const [loading,setLoading]=useState(false),[working,setWorking]=useState<Field|null>(null);
  const [notice,setNotice]=useState("");
+ const [testing,setTesting]=useState(false);
  useEffect(()=>{
   let alive=true;
   setInputs({telegramApiId:"",telegramApiHash:"",telegramSession:"",openaiApiKey:""});
@@ -40,6 +41,16 @@ export default function AccountCredentials({accountId}:{accountId:string}){
   }catch(e){setNotice(e instanceof Error?e.message:"저장 실패")}
   finally{setWorking(null)}
  }
+ async function testOpenAi(){
+  if(testing)return;setTesting(true);setNotice("");
+  try{
+   const res=await fetch("/api/account-credentials/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accountId})});
+   const data=await res.json();
+   if(!res.ok)throw Error(data.error||"API 인증 확인 실패");
+   setNotice(data.message||"OpenAI 키 인증 확인 완료");
+  }catch(e){setNotice(e instanceof Error?e.message:"OpenAI 키 확인 오류")}
+  finally{setTesting(false)}
+ }
  return <section className="nxCredentialPanel">
    <div className="nxCredentialHead"><div><strong><KeyRound size={17}/> 계정별 API 연결</strong><p><b>{accountId}</b> 계정만의 인증정보를 등록합니다.</p></div><span className="nxCredentialSecure"><Lock size={13}/> 서버 암호화</span></div>
    <div className="nxCredentialFields">{labels.map(row=><div className="nxCredentialField" key={row.field}>
@@ -51,6 +62,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
       <button className="nxCredentialSave" disabled={loading||!!working||!inputs[row.field].trim()} onClick={()=>mutate(row.field,inputs[row.field].trim())}><Save size={14}/> 저장</button>
       {status[row.field]&&<button className="nxCredentialDelete" disabled={loading||!!working} title="저장된 키 해제" onClick={()=>{if(confirm(row.label+" 저장값을 해제할까요?"))void mutate(row.field,null)}}><Trash2 size={15}/></button>}
     </div></div>)}</div>
+   <div className="nxCredentialTest"><button disabled={testing||loading||!status.openaiApiKey} onClick={testOpenAi}><Check size={15}/>{testing?"키 확인 중":"저장된 OpenAI API 연결 확인"}</button><span>API 키 유효성만 확인하며 토큰 생성 비용이 발생하지 않는 조회입니다.</span></div>
    <div className="nxCredentialHelp"><WifiOff size={16}/><span>API ID·HASH·세션을 모두 등록해야 계정을 연결할 수 있습니다. 실제 연결은 별도 워커가 수행하며 현재 저장만으로 온라인 상태가 보장되지는 않습니다. API 키와 세션은 브라우저 저장소나 백업 파일에 포함되지 않습니다.</span></div>
    {notice&&<div className="nxCredentialNotice" role="status"><Check size={15}/>{notice}</div>}
  </section>;
