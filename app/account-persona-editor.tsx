@@ -27,7 +27,7 @@ export default function AccountPersonaEditor({account,initialGroupId,groups,peop
 
  const [message,setMessage]=useState("");
  const accountId=account?.id||"";
- const selectedGroup=group||groups[0]?.id||"";
+ const selectedGroup=group||groups.find(g=>/^-?\d{1,20}$/.test(g.id))?.id||"";
  const existing=assignments.find(x=>x.accountId===accountId&&x.groupId===selectedGroup);
  useEffect(()=>{setGroup(initialGroupId&&groups.some(g=>g.id===initialGroupId)?initialGroupId:groups[0]?.id||"");},[accountId,initialGroupId,groups.length]);
  useEffect(()=>{
@@ -57,7 +57,7 @@ export default function AccountPersonaEditor({account,initialGroupId,groups,peop
  }
  return <div className="nxAccountEditor">
   <div className="nxEditorTop"><span className="nxAvatar">{account.name.slice(0,1)}</span><div><strong>{account.name}</strong><small>이 계정의 그룹별 AI 성격을 설정합니다.</small></div>{existing&&<span className="nxAssignedFlag"><Check size={13}/> 적용됨</span>}</div>
-  <label>1. 활동 그룹<select value={selectedGroup} onChange={e=>setGroup(e.target.value)}>{groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+  <label>1. 활동 그룹<select value={selectedGroup} onChange={e=>setGroup(e.target.value)}>{groups.filter(g=>/^-?\d{1,20}$/.test(g.id)).map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
   <label>2. 참여 역할<select value={role} onChange={e=>setRole(e.target.value as Assignment["mode"])}><option value="member">일반 참여자</option><option value="expert">전문가</option><option value="observer">관망형 (자동 발언 제외)</option></select></label>
   <div className="nxTemplateHeading">3. 성격 선택 <small>누르면 아래 설정에 적용됩니다.</small></div>
   <div className="nxTemplateChips">{templates.map(t=><button key={t.label} onClick={()=>{setType(t.role);setStyle(t.style);setRisk(t.risk);}}>{t.label}</button>)}</div>
@@ -76,7 +76,7 @@ export default function AccountPersonaEditor({account,initialGroupId,groups,peop
   <label>투자 성향 <span>{risk}/100</span><input type="range" value={risk} min={0} max={100} step={5} onChange={e=>setRisk(Number(e.target.value))}/></label>
   <label className="nxPersonaScope"><input type="checkbox" checked={applyAll} onChange={e=>setApplyAll(e.target.checked)}/>
   <span><b>이 계정의 모든 그룹에 기본 성격으로 적용</b><small>체크 해제하면 선택한 그룹에만 적용합니다.</small></span></label>
-  <div className="nxEditorActions"><button className="nxPrimary" onClick={commit}><Save size={15}/> 이 계정에 저장</button><button onClick={()=>openTest(selectedGroup)}><MessageCircle size={15}/> 대화 테스트</button></div>
+  <div className="nxEditorActions"><button className="nxPrimary" onClick={commit}><Save size={15}/> 이 계정에 저장</button><button onClick={()=>openTest(selectedGroup)}><MessageCircle size={15}/> 실제 대화 운영</button></div>
   {message&&<p className="nxEditorMessage" role="status">{message}</p>}
   <p className="nxTip">각 그룹에 별도의 성격이 저장되며 기존 공용 페르소나를 다른 계정에서 사용 중이더라도 변경이 퍼지지 않도록 분리합니다. 운영 현황에서 서버 저장(또는 자동 저장)을 활성화하면 워커에 반영됩니다.</p>
  </div>
