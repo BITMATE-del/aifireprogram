@@ -8,7 +8,7 @@ export const dynamic="force-dynamic";
 const respond=(v:unknown,status=200)=>NextResponse.json(v,{status,headers:{"Cache-Control":"no-store"}});
 type Account={id:string;enabled?:boolean};
 type Assignment={accountId:string;groupId:string;personaId:string;mode:"member"|"expert"|"observer"};
-type Persona={id:string;name:string;role:string;style:string;risk:number};
+type Persona={id:string;name:string;role:string;style:string;risk:number;frequency?:"quiet"|"balanced"|"active";responseMode?:"reactive"|"balanced"|"independent";interests?:string};
 type Inbox={id:string;message_id:string;body:string;sender_name:string;observed_at:string};
 type Speaker=Persona&{id:string;accountId:string;participationRole:"member"|"expert"|"observer"};
 type Generated={mode?:string;decision?:string;decisionReason?:string;reason?:string;error?:string;turns?:{speakerId:string;text:string}[]};
@@ -63,11 +63,15 @@ export async function GET(req:NextRequest){
   }
   // Do not let an account dominate every exchange. Recent speakers are
   // de-prioritized, not forcibly rotated.
-  const recent=await client.query(`SELECT DISTINCT account_id FROM moment_group_outbox
+  const recent=await client.query(`SELECT account_id,MAX(created_at) AS last_at FROM moment_group_outbox
      WHERE chat_id=$1 AND source_type='auto' AND status IN ('pending','sending','sent')
-     AND created_at>now()-interval '2 minutes'`,[chatId]);
-  const recentlySpoken=new Set(recent.rows.map((r:{account_id:string})=>r.account_id));
-  const available=speakers.filter(p=>!recentlySpoken.has(p.accountId));
+     AND created_at>now()-interval '15 minutes' GROUP BY account_id`,[chatId]);
+  const lastSpoke=new Map(recent.rows.map((r:{account_id:string;last_at:Date})=>[r.account_id,new Date(r.last_at).getTime()]));
+  const available=speakers.filter(p=>{
+   const last=lastSpoke.get(p.accountId);
+   const interval=p.frequency==="quiet"?600000:p.frequency==="active"?90000:180000;
+   return !last||Date.now()-last>=interval;
+  });
   if(!available.length){
    await client.query("UPDATE moment_auto_groups SET last_inbox_id=$2 WHERE chat_id=$1",[chatId,candidate.id]);
    await client.query("COMMIT");return respond({active:true,idle:"account_rest"});
