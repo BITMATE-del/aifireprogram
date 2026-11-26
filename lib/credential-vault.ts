@@ -58,21 +58,49 @@ export async function accountSecret(accountId:string,field:SecretName):Promise<s
  const res=await db.query(`SELECT ${secretFields[field]} AS value FROM moment_account_credentials WHERE account_id=$1`,[accountId]);
  return res.rows[0]?.value?decrypt(res.rows[0].value):null;
 }
+export const DEFAULT_ACCOUNT_ID="__global_defaults__";
+export const INHERITABLE_FIELDS=["telegramApiId","telegramApiHash","openaiApiKey"] as const;
+export type InheritableField=typeof INHERITABLE_FIELDS[number];
+export async function effectiveAccountSecret(accountId:string,field:SecretName):Promise<{value:string|null;source:"custom"|"default"|"none"}>{
+ const custom=await accountSecret(accountId,field);
+ if(custom)return {value:custom,source:"custom"};
+ if(field==="telegramSession")return {value:null,source:"none"};
+ const shared=await accountSecret(DEFAULT_ACCOUNT_ID,field);
+ return shared?{value:shared,source:"default"}:{value:null,source:"none"};
+}
 export async function allCredentialRecords():Promise<{
  accountId:string;telegramApiId:string;telegramApiHash:string;telegramSession:string
 }[]>{
  const db=await credentialDatabase();
- const result=await db.query(`SELECT account_id,telegram_api_id_encrypted AS id,
- telegram_api_hash_encrypted AS hash,telegram_session_encrypted AS session
- FROM moment_account_credentials
- WHERE telegram_api_id_encrypted IS NOT NULL
- AND telegram_api_hash_encrypted IS NOT NULL
- AND telegram_session_encrypted IS NOT NULL`);
- const rows=[];
+ const result=await db.query(`SELECT account_id,telegram_session_encrypted AS session
+ FROM moment_account_credentials WHERE telegram_session_encrypted IS NOT NULL
+ AND account_id <> $1`,[DEFAULT_ACCOUNT_ID]);
+ const rows:{accountId:string;telegramApiId:string;telegramApiHash:string;telegramSession:string}[]=[];
  for(const row of result.rows){
-  try{rows.push({accountId:row.account_id,telegramApiId:decrypt(row.id),telegramApiHash:decrypt(row.hash),telegramSession:decrypt(row.session)});}catch{}
+  try{
+   const [id,hash]=await Promise.all([
+    effectiveAccountSecret(row.account_id,"telegramApiId"),
+    effectiveAccountSecret(row.account_id,"telegramApiHash")
+   ]);
+   if(id.value&&hash.value)rows.push({
+    accountId:row.account_id,telegramApiId:id.value,telegramApiHash:hash.value,
+    telegramSession:decrypt(row.session)
+   });
+  }catch{}
  }
  return rows;
+}
+export async function defaultCredentialStatus(){
+ const db=await credentialDatabase();
+ const result=await db.query(`SELECT telegram_api_id_encrypted IS NOT NULL AS telegram_api_id,
+ telegram_api_hash_encrypted IS NOT NULL AS telegram_api_hash,
+ openai_api_key_encrypted IS NOT NULL AS openai_api_key,updated_at
+ FROM moment_account_credentials WHERE account_id=$1`,[DEFAULT_ACCOUNT_ID]);
+ const row=result.rows[0];
+ return {
+  telegramApiId:Boolean(row?.telegram_api_id),telegramApiHash:Boolean(row?.telegram_api_hash),
+  openaiApiKey:Boolean(row?.openai_api_key),updatedAt:row?.updated_at||null
+ };
 }
 export async function credentialsStatus(accountId:string){
  const db=await credentialDatabase();
