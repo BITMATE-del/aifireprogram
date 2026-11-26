@@ -62,12 +62,16 @@ export async function POST(req:NextRequest){
     if(!budget.ok)return NextResponse.json({error:budget.message||"API 사용 한도를 초과했습니다.",code:"AI_BUDGET_LIMIT"},{status:429});
    }catch{return NextResponse.json({error:"API 사용 한도를 확인하지 못했습니다. 요청을 중단했습니다."},{status:503});}
   }
+  const speakers=people.filter(p=>p.participationRole!=="observer");
+  if(!speakers.length)return NextResponse.json({error:"이 그룹의 모든 AI 계정이 관망 모드입니다. 최소 한 계정의 역할을 일반 참여자 또는 전문가로 변경하세요.",code:"NO_ACTIVE_SPEAKER"},{status:400});
+  const roster=speakers.map((p,i)=>({speakerId:"P"+(i+1),name:p.name,role:p.role,style:p.style,risk:p.risk,participationRole:p.participationRole}));
+  const idFromSlot=new Map(roster.map((p,i)=>[p.speakerId,speakers[i]]));
   const description=[
     "당신은 비공개 AI 투자 커뮤니티 시뮬레이션의 대화 디렉터입니다.",
     "입력된 사람의 발언이 있다면 그 내용을 핵심으로 삼아 일반 참여자들의 후속 반응을 만드세요.",
     "모든 발언을 전문가 분석으로 만들지 마세요. 자연스러운 질문, 짧은 의견, 조심스러운 이견, 추가 확인 요청을 우선하세요.",
     "페르소나의 개별 role, style, risk, participationRole, accountId를 준수하세요. member 역할이 발언의 중심이며 expert는 요청이 있거나 근거가 필요한 때에만 반응합니다.",
-    "각 발언자는 계정별 id가 다릅니다. 같은 이름이어도 id가 다른 계정을 혼동하지 마세요. observer는 절대로 발언시키지 마세요.",
+    "발언자는 사용자 데이터에 제공된 짧은 speakerId(P1, P2 등)로 식별합니다. speakerId 값은 반드시 목록에서 그대로 골라 작성하세요. observer는 절대로 발언시키지 마세요.",
     "단순 인사·의미 없는 중복 발언에는 0개도 가능합니다. 그러나 사용자가 직접 질문한 경우, 문맥에 맞게 답할 수 있다면 member 페르소나에서 1~2개의 짧고 유용한 반응을 생성하세요.",
     "직전 대화와 의미 중복, 동일 어구 반복, 근거 없는 찬양, 노골적인 홍보성 발언을 피하세요.",
     "실제 데이터가 제공되지 않았으므로 최신 시세나 거래 성과를 만들어 내지 마세요.",
@@ -75,7 +79,7 @@ export async function POST(req:NextRequest){
     "대화는 교육용 시뮬레이션이며 실제 참여자가 쓴 것처럼 사칭하지 마세요.",
     "질문이 아닌 때는 0~3개, 명확한 질문에는 보통 1~2개의 자연스러운 한국어 메시지를 만드세요. 불필요한 맞장구를 만들지 마세요.",
     "한 번 반응한 참여자는 그 주제에 연속 답변을 하지 않도록 하고, 질문형·관망형 회원의 말수 차이를 유지하세요.",
-    '반드시 JSON 객체 {"turns":[{"speakerId":"페르소나 id","text":"발언"}]} 형식으로만 응답하세요.'
+    '반드시 JSON 객체 {"turns":[{"speakerId":"P1","text":"발언"}]} 형식으로만 응답하세요. speakerId는 입력된 발언자 목록의 P1, P2 등의 ID만 사용하세요.'
   ].join("\n");
   const response=await fetch("https://api.openai.com/v1/chat/completions",{
     method:"POST",
@@ -85,7 +89,7 @@ export async function POST(req:NextRequest){
       response_format:{type:"json_object"},
       temperature:0.7,
       max_tokens:1200,
-      messages:[{role:"system",content:description},{role:"user",content:JSON.stringify({topic,humanMessage:human,isDirectQuestion,personas:people,history,marketData:"실시간 시세 미연동"})}]
+      messages:[{role:"system",content:description},{role:"user",content:JSON.stringify({topic,humanMessage:human,isDirectQuestion,personas:roster,history,marketData:"실시간 시세 미연동"})}]
     }),
     signal:AbortSignal.timeout(30000),cache:"no-store"
   });
@@ -109,15 +113,29 @@ export async function POST(req:NextRequest){
 
   let parsed:{turns?:{speakerId?:unknown;text?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
-  const lookup=new Map(people.filter(p=>p.participationRole!=="observer").map(p=>[p.id,p.name]));
-  const normalize=(v:string)=>v.toLowerCase().replace(/[\s\p{P}\p{S}]/gu,"");
+  const normalize=(v:string)=>v.toLowerCase().replace(/[\\s\\p{P}\\p{S}]/gu,"");
   const seen=new Set(history.slice(-10).map(x=>normalize(x.text)));
-  const turns:Turn[]=(Array.isArray(parsed.turns)?parsed.turns:[]).slice(0,3).flatMap(t=>{
-    const speakerId=str(t.speakerId,80),text=str(t.text,700);
-    if(!lookup.has(speakerId)||!text||seen.has(normalize(text)))return [];
-    seen.add(normalize(text));return [{speakerId,speaker:lookup.get(speakerId)!,text}];
+  let rejectedSpeaker=0,rejectedRepeat=0,rejectedEmpty=0;
+  const rawTurns=Array.isArray(parsed.turns)?parsed.turns:[];
+  const turns:Turn[]=rawTurns.slice(0,3).flatMap(t=>{
+    const label=str(t.speakerId,80),message=str(t.text,700);
+    const matching=idFromSlot.get(label)||speakers.find(p=>p.id===label);
+    if(!matching){rejectedSpeaker++;return [];}
+    if(!message){rejectedEmpty++;return [];}
+    if(seen.has(normalize(message))){rejectedRepeat++;return [];}
+    seen.add(normalize(message));
+    return [{speakerId:matching.id,speaker:matching.name,text:message}];
   });
-  if(turns.length===0)return NextResponse.json({mode:"ai",turns:[],notice:isDirectQuestion?"질문에 대한 답변이 생성되지 않았습니다. 계정의 페르소나 설정을 확인하거나 다시 생성해 보세요.":"이번에는 추가 반응이 생성되지 않았습니다. 필요하면 질문을 더 구체적으로 작성해 보세요."},{headers:{"Cache-Control":"no-store"}});
+  if(!turns.length){
+    const reason=rawTurns.length===0?"MODEL_NO_TURNS":rejectedSpeaker?"UNKNOWN_SPEAKER":rejectedRepeat?"DUPLICATE_TURNS":"EMPTY_TURNS";
+    const notice=reason==="MODEL_NO_TURNS"
+      ?"AI가 추가 발언이 필요하지 않다고 판단했습니다. 질문이라면 성격 설정이나 질문 내용을 확인해 주세요."
+      :reason==="UNKNOWN_SPEAKER"?"AI가 답변을 생성했지만 발언자 식별에 실패했습니다. 다시 생성해 보세요."
+      :reason==="DUPLICATE_TURNS"?"생성된 반응이 이전 대화와 동일해 제외됐습니다."
+      :"AI가 빈 발언을 반환해 제외됐습니다.";
+    console.info("AI discussion filtered", {reason,returned:rawTurns.length,rejectedSpeaker,rejectedRepeat,rejectedEmpty});
+    return NextResponse.json({mode:"ai",turns:[],reason,notice},{headers:{"Cache-Control":"no-store"}});
+  }
   return NextResponse.json({mode:"ai",turns,notice:"AI가 생성한 비공개 토론 시뮬레이션입니다. 실제 시세 검증은 수행되지 않았습니다."},{headers:{"Cache-Control":"no-store"}});
  }catch{return NextResponse.json({error:"토론 생성 중 서버 오류가 발생했습니다."},{status:500})}
 }
