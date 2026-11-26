@@ -131,3 +131,13 @@
 .nxGroupEmpty{display:grid;justify-items:center;text-align:center;gap:8px;background:#f8faf9;border:1px dashed #d7e7e1;border-radius:11px;padding:28px 14px;color:#6f8984}
 .nxGroupEmpty strong{font-size:13px;color:#416c63}.nxGroupEmpty p{font-size:12px;max-width:370px;line-height:1.7;margin:0}
 .nxAccountGroups>.nxTip{font-size:11px;line-height:1.6;margin-top:12px}
+
+.nxGroupSearchTools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0}
+.nxGroupSearchInput{display:flex;align-items:center;gap:9px;flex:1;min-width:200px;border:1px solid #d6e5e2;background:#fff;border-radius:9px;padding:0 12px;color:#71918a}
+.nxGroupSearchInput:focus-within{border-color:#57a994;box-shadow:0 0 0 2px #57a99418}
+.nxGroupSearchInput input{border:0;outline:0;background:transparent;min-width:0;flex:1;height:41px;color:#2c4d50;font-size:12px}
+.nxGroupSearchInput button{border:0;background:transparent;color:#71918a;cursor:pointer;display:grid;place-items:center;padding:5px}
+.nxSelectedOnly{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:#4c706a;cursor:pointer}
+.nxSelectedOnly input{accent-color:#168575;width:15px;height:15px}
+.nxGroupResultCount{font-size:11px;color:#8b9e9b;white-space:nowrap}
+@media(max-width:640px){.nxGroupSearchInput{flex-basis:100%}.nxGroupSearchTools{gap:10px}}
