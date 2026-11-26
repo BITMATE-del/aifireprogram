@@ -11,11 +11,13 @@ export async function GET(req:NextRequest){
   const content=result.rows[0]?.content as Record<string,unknown>|undefined;
   const accounts=Array.isArray(content?.accounts)?content.accounts as {id?:unknown;enabled?:unknown}[]:[];
   const assignments=Array.isArray(content?.assignments)?content.assignments as {accountId?:unknown;groupId?:unknown;mode?:unknown}[]:[];
-  const enabled=new Set(accounts.filter(a=>a.enabled!==false&&typeof a.id==="string").map(a=>a.id as string));
+  const disabled=new Set(accounts.filter(a=>a.enabled===false&&typeof a.id==="string").map(a=>a.id as string));
   const all=await allCredentialRecords();
   const data=[] as (typeof all[number]&{chatIds:string[]})[];
   for(const rec of all){
-   if(!enabled.has(rec.accountId))continue;
+   // Unsaved new accounts may connect in discovery-only mode (no chat permissions).
+   // Explicitly disabled saved accounts remain disconnected.
+   if(disabled.has(rec.accountId))continue;
    const allowed=await allowedChatsForAccount(rec.accountId);
    const chats=Array.from(new Set(assignments.filter(a=>a.accountId===rec.accountId&&a.mode!=="observer"&&typeof a.groupId==="string"&&allowed.has(a.groupId)).map(a=>a.groupId as string)));
    // Connecting before the first group assignment enables group discovery.
