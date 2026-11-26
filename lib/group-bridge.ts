@@ -23,6 +23,8 @@ export async function bridgeDatabase(){
     account_id text NOT NULL, chat_id text NOT NULL, last_seen timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY(account_id,chat_id)
    )`);
+   await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS idempotency_key text");
+   await db.query("CREATE UNIQUE INDEX IF NOT EXISTS moment_outbox_idempotency ON moment_group_outbox(idempotency_key) WHERE idempotency_key IS NOT NULL");
    await db.query("CREATE INDEX IF NOT EXISTS moment_inbox_chat_recent ON moment_group_inbox(chat_id,id DESC)");
    await db.query("CREATE INDEX IF NOT EXISTS moment_outbox_account_status ON moment_group_outbox(account_id,status,id)");
   })().catch(err=>{initialized=null;throw err});
@@ -49,4 +51,15 @@ export function authorizedBridge(req:Request):boolean{
  if(a.length!==b.length)return false;
  let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
  return diff===0;
+}
+
+/** A send that was claimed but not acknowledged might already exist at Telegram.
+ * Never retry automatically. Flag it for operator reconciliation.
+ */
+export async function flagUnconfirmedSends(){
+ const db=await bridgeDatabase();
+ await db.query(`UPDATE moment_group_outbox
+  SET status='failed',last_error='전송 결과 미확인: 텔레그램에서 실제 발송 여부를 확인한 후 처리하세요.',
+      completed_at=now()
+  WHERE status='sending' AND claimed_at<now()-interval '3 minutes'`);
 }
