@@ -98,6 +98,17 @@ async def process_task(session,base:str,headers:dict,task:dict):
             return
         new_session=StringSession.save(pending.client.session)
         await respond(session,base,headers,task,"connected","계정 연결 완료. 로그인 세션을 암호화 저장했습니다.",new_session)
+        # Discover joined groups immediately, before any group assignment.
+        # Never subscribe to messages or send replies from unselected groups.
+        try:
+            dialogs=await pending.client.get_dialogs(limit=200)
+            discovered=[{"id":str(d.id),"title":str(d.name or "그룹")[:120]} for d in dialogs if d.is_group]
+            async with session.post(base+"/api/bridge/groups",headers=headers,
+                json={"accountId":account_id,"groups":discovered[:100]}) as response:
+                if response.status!=200:
+                    log.warning("Account group discovery delivery failed, status=%s",response.status)
+        except Exception as exc:
+            log.warning("Account group discovery failed, type=%s",type(exc).__name__)
         await close(account_id)
         log.info("Telegram account website login completed for %s",account_id)
     except FloodWaitError as exc:
