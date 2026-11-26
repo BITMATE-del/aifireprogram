@@ -21,7 +21,7 @@ export async function GET(req:NextRequest){
   await client.query("BEGIN");
   const mode=await client.query(`SELECT enabled,disclosure_confirmed,min_interval_seconds,last_inbox_id,last_generated_at
      FROM moment_auto_groups WHERE chat_id=$1 FOR UPDATE`,[chatId]);
-  if(!mode.rowCount||!mode.rows[0].enabled||!mode.rows[0].disclosure_confirmed){
+  if(!mode.rowCount||!mode.rows[0].enabled){
    await client.query("COMMIT");return respond({active:false});
   }
   const m=mode.rows[0];
