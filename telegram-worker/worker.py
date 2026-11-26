@@ -13,6 +13,7 @@ from aiohttp import ClientSession, ClientTimeout
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError, RPCError
+from login_flow import poll as poll_logins
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
 log=logging.getLogger("moment.bridge")
@@ -157,6 +158,7 @@ async def run():
         next_refresh=0.0
         while True:
             try:
+                await poll_logins(session,BASE,HEADERS)
                 now=asyncio.get_running_loop().time()
                 if now>=next_refresh:
                     await update_accounts(session,connections)
