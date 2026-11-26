@@ -1,30 +1,43 @@
-# 모먼트 스튜디오 · 텔레그램 승인형 그룹 연결
+# 텔레그램 연결 · 모먼트 스튜디오
 
-이 코드는 **봇이 아닌 본인 소유의 텔레그램 일반 계정**으로 비공개 테스트 그룹의 새 메시지를 읽습니다. 생성된 AI 답글은 관리자에서 수동 승인한 경우에만 전송합니다. 현재 자동 발언은 사용하지 않습니다.
+**Telegram API ID, API HASH, StringSession 및 OpenAI API KEY는 이제 관리자 웹사이트에서 계정별로 저장합니다.** 별도 워커마다 입력할 필요가 없습니다. 관리자 웹에서 등록한 정보는 PostgreSQL에서 AES-256-GCM으로 암호화되며, 화면은 등록 여부만 반환합니다.
 
-## 연결 방법
+## 설정 순서
 
-1. 본인의 Telegram API ID/HASH를 발급받아 보안 환경변수로 보관합니다.
-2. 로컬에서 `python create_session.py` 실행 후 본인이 로그인합니다. 생성한 세션 문자열은 비밀번호와 동등합니다.
-3. 관리자에서 계정과 그룹을 등록하고, 해당 그룹에는 텔레그램의 **숫자형 chat ID**를 사용합니다. 계정 이름은 `TELEGRAM_ACCOUNT_ID`와 정확히 일치해야 합니다.
-4. 관리자 **시스템 상태 → 현재 설정 서버에 저장**으로 배정을 서버에 반영합니다.
-5. 이 워커를 별도 Railway 서비스로 실행해 `python worker.py`를 시작합니다. 의존성은 `pip install -r requirements.txt`로 설치합니다.
-6. 다음 환경변수를 관리자 서비스/워커에 설정합니다. 키 문자열이나 세션을 GitHub에 올리지 않습니다.
+1. 관리자 웹 로그인 → **계정 관리** → 계정 추가 또는 선택 → **API 연결 설정**
+2. 해당 계정의 Telegram API ID, API HASH, Telegram StringSession, OpenAI API KEY 입력 후 항목별 저장
+3. **AI 페르소나 설정** 탭에서 계정이 활동할 그룹 및 성격 배정
+4. **그룹 관리**에 실제 숫자형 Telegram 그룹 ID 등록
+5. **운영 현황 → PostgreSQL 서버 저장**에서 현재 계정·그룹 배치를 서버에 저장. (별도의 계정 비밀키는 서버에 이미 암호화 저장됨)
+6. 워커가 사이트 서버의 인증된 연결 설정을 정기 조회하고, 활동 가능한 계정만 연결
+7. **AI 토론**에서 실제 그룹 메시지를 확인 → AI 반응 생성 → 발송할 답변을 운영자가 개별 승인
 
-| 위치 | 환경변수 |
-|---|---|
-| 관리자 서비스 | `TELEGRAM_BRIDGE_KEY` (32자 이상 무작위), `TELEGRAM_ALLOWED_CHAT_IDS` |
-| 워커 | 동일 `TELEGRAM_BRIDGE_KEY`와 `TELEGRAM_ALLOWED_CHAT_IDS` |
-| 워커 | `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_STRING_SESSION` |
-| 워커 | `TELEGRAM_ACCOUNT_ID` (관리자 계정 ID와 일치), `MOMENT_BASE_URL` (HTTPS 관리자 주소) |
+## Railway 서비스별 환경변수
 
-여러 계정을 사용할 경우 계정마다 별도 워커·별도 세션을 사용합니다. 기본적으로 한 그룹에서 원본 메시지를 읽고, 운영자가 승인한 한 계정만 회신합니다.
+### aifireprogram (웹 관리자)
+- `ADMIN_PASSWORD`, `AUTH_SECRET`, `DATABASE_URL`
+- `CREDENTIAL_ENCRYPTION_KEY` (최초 생성한 랜덤 32자 이상 비밀키: 교체하면 기존 저장 정보 복호화 불가)
+- `TELEGRAM_BRIDGE_KEY` (랜덤 32자 이상)
+- `TELEGRAM_ALLOWED_CHAT_IDS` (활동을 허용할 숫자형 그룹 ID, 쉼표 구분)
+- `OPENAI_API_KEY` (선택: 계정별 키가 없을 경우 사용하는 서버 기본 키)
 
-로그인 주체의 권한을 확인해야 하며 사용 동의가 없는 계정의 세션을 사용해서는 안 됩니다. 참여자 허락을 받은 비공개 그룹에서만 이용하세요.
+### telegram-worker (Python 워커)
+- `MOMENT_BASE_URL` (HTTPS 관리자 도메인)
+- `TELEGRAM_BRIDGE_KEY` (관리자와 동일, Railway 내부 참조 가능)
+- `BRIDGE_POLL_SECONDS` (선택, 기본 8초)
+- `ACCOUNT_REFRESH_SECONDS` (선택, 기본 60초)
 
-## 주의
+**워커에는 계정별 `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_STRING_SESSION`, `TELEGRAM_ACCOUNT_ID` 변수를 별도로 입력하지 않습니다.** 서버에서 활성 계정을 가져옵니다.
 
-- **그룹 메시지를 AI 학습 데이터로 사용하지 않습니다.** 승인형 반응 테스트의 짧은 문맥으로만 사용하고, 데이터 보존/삭제 정책은 정식 운영 전에 확정해야 합니다.
-- Telegram 제한 및 FloodWait를 우회하거나 스팸 전송을 하지 않습니다.
-- 자동 재시도는 중복 발송 가능성 때문에 기본적으로 사용하지 않습니다.
-- 연결 작업은 아직 운영 인증정보가 없으므로 실제 환경 테스트 전입니다.
+## 로컬에서 본인 계정 세션 발급
+
+`START_WINDOWS.bat` 또는 `create_session.py`로 사용자 본인 계정 세션을 생성합니다. 출력되는 세션을 사용자 계정의 사이트 API 설정에 입력하세요. 세션 문자열은 로그인 권한과 같으므로 외부에 노출하거나 GitHub에 넣으면 안 됩니다.
+
+## 안전장치
+
+- 관리자 인증이 없으면 웹 API 설정을 변경할 수 없습니다.
+- 웹 API에서 암호화된 키 원문을 다시 표시하지 않습니다.
+- 워커는 허용된 그룹·서버 저장된 배정·활성 계정만 연결합니다.
+- AI 메시지는 승인 없이 전송되지 않으며, 실제 전송 시 `[AI 시뮬레이션]`을 붙입니다.
+- 개별 키/세션이 저장돼도 그룹 배정을 서버에 저장하지 않으면 연결이 시작되지 않습니다.
+- 이 서비스는 현재 **단일 관리자 로그인**입니다. 개별 고객 로그인과 고객 간 DB 접근권한 분리는 아직 구현 전입니다.
