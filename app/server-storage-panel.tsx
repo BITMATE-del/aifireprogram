@@ -29,6 +29,21 @@ export default function ServerStoragePanel({state,onLoad}:Props){
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[fetchServer]);
  useEffect(()=>{void refresh()},[refresh]);
+ useEffect(()=>{
+  function updateFromGroupSelection(event:Event){
+   const detail=(event as CustomEvent<{version:number;state:Data}>).detail;
+   if(!detail?.state||!Number.isSafeInteger(detail.version))return;
+   syncedVersion.current=detail.version;
+   setVersion(detail.version);
+   setExists(true);
+   lastSaved.current=serialize(detail.state);
+   setBaseline(lastSaved.current);
+   setNotice("선택한 그룹의 등록·배정이 서버에 즉시 저장됐습니다.");
+  }
+  window.addEventListener("moment:workspace-synced",updateFromGroupSelection);
+  return()=>window.removeEventListener("moment:workspace-synced",updateFromGroupSelection);
+ },[]);
+
  async function persist(value:Data,silent=false){
   if(busy.current)return;
   busy.current=true;setWorking(true);if(!silent)setNotice("");
