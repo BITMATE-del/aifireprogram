@@ -13,14 +13,20 @@ export async function GET(req:NextRequest){
   const client=await db.connect();
   try{
    await client.query("BEGIN");
+   // A worker restart loses its in-memory Telegram challenge. Do not leave an
+   // unrecoverable processing state or silently replay an OTP.
+   await client.query(`UPDATE moment_telegram_login SET phase='error',
+      message='인증 연결이 중단됐습니다. 전화번호부터 다시 시도하세요.',
+      payload_cipher=NULL,updated_at=now()
+      WHERE phase='processing' AND updated_at<now()-interval '75 seconds'`);
    const {rows}=await client.query(`SELECT account_id,request_id,action,payload_cipher
      FROM moment_telegram_login WHERE phase='pending' AND expires_at>now()
      ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1`);
    if(!rows.length){await client.query("COMMIT");return out({task:null})}
    const item=rows[0];
-   await client.query(`UPDATE moment_telegram_login SET phase='processing',payload_cipher=NULL,
-     updated_at=now() WHERE account_id=$1 AND request_id=$2`,[item.account_id,item.request_id]);
-   await client.query("COMMIT");
+   // Read/decrypt before clearing the one-time payload. A failed decrypt may
+   // never consume the challenge without returning it to the worker.
+   const payload=item.payload_cipher?decryptTransientSecret(item.payload_cipher):"";
    let id:string|null=null,hash:string|null=null;
    if(item.action==="start"){
     const creds=await Promise.all([
@@ -29,9 +35,12 @@ export async function GET(req:NextRequest){
     ]);
     id=creds[0].value;hash=creds[1].value;
    }
+   await client.query(`UPDATE moment_telegram_login SET phase='processing',
+     payload_cipher=NULL,updated_at=now()
+     WHERE account_id=$1 AND request_id=$2`,[item.account_id,item.request_id]);
+   await client.query("COMMIT");
    return out({task:{accountId:item.account_id,requestId:item.request_id,action:item.action,
-    payload:item.payload_cipher?decryptTransientSecret(item.payload_cipher):"",
-    apiId:id,apiHash:hash}});
+    payload,apiId:id,apiHash:hash}});
   }catch(e){await client.query("ROLLBACK");throw e}
   finally{client.release()}
  }catch{return out({error:"인증 작업을 조회하지 못했습니다."},503)}
