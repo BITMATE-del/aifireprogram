@@ -180,6 +180,6 @@ export async function POST(req:NextRequest){
     console.info("AI discussion filtered", {reason,returned:rawTurns.length,rejectedSpeaker,rejectedRepeat,rejectedEmpty});
     return NextResponse.json({mode:"ai",turns:[],reason,decision:"silent",decisionReason:str(parsed.reason,180)||notice,notice},{headers:{"Cache-Control":"no-store"}});
   }
-  return NextResponse.json({mode:"ai",turns,notice:"AI가 생성한 비공개 토론 시뮬레이션입니다. 실제 시세 검증은 수행되지 않았습니다."},{headers:{"Cache-Control":"no-store"}});
+  return NextResponse.json({mode:"ai",turns,decision:"reply",decisionReason:str(parsed.reason,180)||"유용한 후속 발언",notice:"대화 흐름에 맞는 반응을 생성했습니다."},{headers:{"Cache-Control":"no-store"}});
  }catch{return NextResponse.json({error:"토론 생성 중 서버 오류가 발생했습니다."},{status:500})}
 }
