@@ -160,3 +160,34 @@
 .nxQueue>div>span,.nxQueue>div>small{min-width:0;overflow-wrap:anywhere}
 @media(max-width:1050px){.nxLiveGrid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:680px){.nxTestGrid>.nxUnderPanel{grid-column:1}.nxTestGrid>.nxUnderPanel .nxPanelHeading{align-items:flex-start;flex-wrap:wrap}.nxLiveGrid{gap:12px}.nxLiveList,.nxLiveDetail{padding:12px;min-height:160px}.nxQueue>div{grid-template-columns:minmax(0,1fr);gap:5px}.nxQueue small{text-align:left}}
+
+/* Start / stop real-time group conversation */
+.nxAutoConversation{min-width:0}
+.nxAutoHero{border:1px solid #d7e9e1;background:#f6fbf8;border-radius:12px;padding:20px;display:grid;gap:14px}
+.nxAutoHeroHead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.nxAutoStatus{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:800}
+.nxAutoStatus.running{color:#12826d}.nxAutoStatus.stopped{color:#728b94}
+.nxAutoOnline{display:flex;align-items:center;gap:7px;font-size:12px;color:#5c8078}
+.nxAutoHero>p{font-size:12px;line-height:1.7;color:#63867c;margin:0}
+.nxAutoDisclosure{display:flex!important;align-items:center;gap:10px;color:#41695e!important;font-size:12px!important;font-weight:600!important}
+.nxAutoDisclosure>input{margin:0!important;width:17px!important;height:17px!important;flex-shrink:0;accent-color:#197f69}
+.nxAutoControls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.nxAutoControls button{display:flex;align-items:center;justify-content:center;gap:9px;border-radius:9px;border:1px solid transparent;padding:12px 22px;font-weight:800;font-size:13px}
+.nxAutoStart{background:#137f70;color:white}.nxAutoStop{background:#fff2f0;color:#b3483c;border-color:#f0c8c1!important}
+.nxAutoControls>span{color:#77958c;font-size:11px}
+.nxAutoNotice{padding:13px 15px;background:#eff8f3;color:#276d5d;border:1px solid #d3e8dc;border-radius:8px;font-size:12px}
+.nxAutoError{padding:12px 15px;background:#fff5f1;color:#a64d40;border-radius:8px;font-size:12px}
+.nxAutoHistory{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;margin-top:18px}
+.nxAutoColumn{min-height:240px;border:1px solid #e0e9e8;border-radius:10px;padding:15px;min-width:0}
+.nxAutoColumn h3{font-size:14px;margin:0 0 12px}.nxAutoColumn h3 small{font-size:11px;color:#89a29a}
+.nxAutoRecord{padding:12px 0;border-bottom:1px solid #eef1f1;min-width:0}
+.nxAutoRecord>strong{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#375b57;align-items:center;overflow-wrap:anywhere}
+.nxAutoRecord time{color:#9caeb1;font-size:10px;font-weight:400;text-align:right}
+.nxAutoRecord p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.7;color:#5c7074}
+.nxAutoRecord>small{display:block;color:#b55b4b;font-size:11px;margin-top:5px}
+.nxAutoSendStatus{font-size:10px;background:#ecf5f0;color:#29836b;padding:4px 6px;border-radius:5px;white-space:nowrap}
+.nxAutoSendStatus.failed{background:#fff0ed;color:#b15548}
+.nxAutoHelp{display:flex;align-items:flex-start;gap:10px;margin-top:15px;color:#69867f;font-size:11px;line-height:1.7}
+.nxAutoHelp svg{flex-shrink:0;margin-top:2px}
+@media(max-width:980px){.nxAutoHistory{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.nxAutoHero{padding:15px}.nxAutoHeroHead{align-items:flex-start}.nxAutoControls button{width:100%}.nxAutoColumn{padding:12px}}
