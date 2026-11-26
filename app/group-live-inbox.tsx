@@ -43,7 +43,7 @@ export default function GroupLiveInbox({groupId,people,assignments}:{
   try{
    const history=inbox.filter(m=>Number(m.id)<Number(current.id)).slice(-12).map(m=>({speaker:m.sender_name,text:m.body}));
    const response=await fetch("/api/discussion",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-    topic:current.body,humanMessage:current.body,groupId,credentialAccountId:eligible[0]?.accountId,personas:eligible,history
+    topic:current.body,humanMessage:current.body,inboxMessageId:current.id,groupId,credentialAccountId:eligible[0]?.accountId,personas:eligible,history
    })});
    const result=await response.json();
    if(!response.ok)throw Error(result.error||"AI 반응 생성 실패");
@@ -89,7 +89,7 @@ export default function GroupLiveInbox({groupId,people,assignments}:{
      </>:<div className="nxEmpty">왼쪽의 메시지를 선택하세요.</div>}
    </div>
   </div>
-  <div className="nxQueue"><strong>전송 처리 기록</strong>{outbox.length?outbox.slice(0,10).map(m=><div key={m.id}><span>{m.account_id}</span><span>{m.body.slice(0,100)}</span><small>{m.status==="pending"?"전송 대기":m.status==="sending"?"전송 처리 중":m.status==="sent"?"전송 완료":m.status==="failed"?"전송 실패·확인 필요":"취소"}</small></div>):<p className="nxTip">승인된 메시지가 없습니다.</p>}</div>
+  <div className="nxQueue"><strong>전송 처리 기록 <small>승인 후 표시됩니다</small></strong>{outbox.length?outbox.slice(0,10).map(m=><div key={m.id}><span>{m.account_id}</span><span>{m.body.slice(0,100)}</span><small>{m.status==="pending"?"전송 대기":m.status==="sending"?"전송 처리 중":m.status==="sent"?"전송 완료":m.status==="failed"?"전송 실패·확인 필요":"취소"}</small></div>):<p className="nxTip">아직 승인한 답변이 없습니다. AI 반응을 생성하고 내용을 검토한 후 승인하면 이곳에 기록됩니다.</p>}</div>
   <p className="nxTip" role="status">{notice}</p>
  </section>;
 }
