@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {credentialsStatus,saveCredential,type SecretName} from "../../../lib/credential-vault";
+import {credentialsStatus,saveCredential,credentialDatabase,type SecretName} from "../../../lib/credential-vault";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const names=new Set<SecretName>(["telegramApiId","telegramApiHash","telegramSession","openaiApiKey"]);
@@ -31,4 +31,17 @@ export async function PATCH(req:NextRequest){
   await saveCredential(input.accountId as string,field,typeof value==="string"?value.trim():null);
   return json({ok:true,status:await credentialsStatus(input.accountId as string)});
  }catch{return json({error:"저장하지 못했습니다. 서버 DB 또는 암호화 설정을 확인하세요."},503)}
+}
+
+export async function DELETE(req:NextRequest){
+ const origin=req.headers.get("origin");
+ if(origin&&origin!==req.nextUrl.origin)return json({error:"잘못된 요청 출처입니다."},403);
+ let body:{accountId?:unknown};
+ try{body=await req.json()}catch{return json({error:"잘못된 요청입니다."},400)}
+ if(!validAccount(body.accountId))return json({error:"계정 ID를 확인하세요."},400);
+ try{
+  const db=await credentialDatabase();
+  await db.query("DELETE FROM moment_account_credentials WHERE account_id=$1",[body.accountId]);
+  return json({ok:true});
+ }catch{return json({error:"계정 인증정보 삭제에 실패했습니다."},503)}
 }
