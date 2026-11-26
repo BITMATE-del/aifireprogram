@@ -4,8 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY worker.py ./
-RUN python -m py_compile worker.py
+COPY worker.py login_flow.py ./
+RUN python -m py_compile worker.py login_flow.py
 RUN useradd --create-home --uid 10001 moment
 USER moment
 CMD ["python", "worker.py"]
