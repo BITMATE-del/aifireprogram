@@ -99,7 +99,7 @@ export async function POST(req:NextRequest){
   let parsed:{turns?:{speakerId?:unknown;text?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
   const lookup=new Map(people.filter(p=>p.participationRole!=="observer").map(p=>[p.id,p.name]));
-  const normalize=(v:string)=>v.toLowerCase().replace(/[\\s\\p{P}\\p{S}]/gu,"");
+  const normalize=(v:string)=>v.toLowerCase().replace(/[\s\p{P}\p{S}]/gu,"");
   const seen=new Set(history.slice(-10).map(x=>normalize(x.text)));
   const turns:Turn[]=(Array.isArray(parsed.turns)?parsed.turns:[]).slice(0,3).flatMap(t=>{
     const speakerId=str(t.speakerId,80),text=str(t.text,700);
