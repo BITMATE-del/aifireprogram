@@ -33,11 +33,21 @@ export async function POST(req:NextRequest){
   if(groupId && await isAllowedGroup(groupId)){
    try{
     const db=await bridgeDatabase();
-    const recent=await db.query(`SELECT sender_name AS speaker,body AS text FROM
-       (SELECT sender_name,body,id FROM moment_group_inbox
-        WHERE chat_id=$1 AND ($2='' OR id < $2::bigint)
-        ORDER BY id DESC LIMIT 20) recent
-       ORDER BY id ASC`,[groupId,/^\d+$/.test(inboxMessageId)?inboxMessageId:""]);
+    // Interleave real member messages and previously sent AI messages in Telegram
+    // order so the next response can continue the actual group conversation.
+    const recent=await db.query(`WITH current_msg AS (
+      SELECT message_id FROM moment_group_inbox WHERE chat_id=$1 AND id=$2::bigint
+     ), dialog AS (
+      SELECT sender_name AS speaker,body AS text,message_id AS tid
+       FROM moment_group_inbox WHERE chat_id=$1 AND message_id<
+       COALESCE((SELECT message_id FROM current_msg),9223372036854775807)
+      UNION ALL
+      SELECT account_id AS speaker,body AS text,sent_message_id AS tid
+       FROM moment_group_outbox WHERE chat_id=$1 AND status='sent'
+       AND sent_message_id IS NOT NULL AND sent_message_id<
+       COALESCE((SELECT message_id FROM current_msg),9223372036854775807)
+     ) SELECT speaker,text FROM (SELECT speaker,text,tid FROM dialog ORDER BY tid DESC LIMIT 20) x ORDER BY tid ASC`,
+      [groupId,/^\d+$/.test(inboxMessageId)?inboxMessageId:"0"]);
     if(recent.rowCount)history=recent.rows.map((r:{speaker:string;text:string})=>({speaker:str(r.speaker,60),text:str(r.text,600)}));
    }catch{ /* keep manual test available if the real inbox is not ready */ }
   }
