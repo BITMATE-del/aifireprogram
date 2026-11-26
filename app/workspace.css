@@ -141,3 +141,22 @@
 .nxSelectedOnly input{accent-color:#168575;width:15px;height:15px}
 .nxGroupResultCount{font-size:11px;color:#8b9e9b;white-space:nowrap}
 @media(max-width:640px){.nxGroupSearchInput{flex-basis:100%}.nxGroupSearchTools{gap:10px}}
+
+/* FIX: Live inbox belongs on a full-width row of the discussion grid.
+   Its own two-column layout must never overflow the 380px test-settings column. */
+.nxTestGrid>.nxUnderPanel{grid-column:1 / -1;min-width:0;width:100%;box-sizing:border-box}
+.nxTestGrid>.nxUnderPanel .nxPanelHeading{min-width:0}
+.nxTestGrid>.nxUnderPanel .nxPanelHeading>div{min-width:0}
+.nxLiveGrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;min-width:0;width:100%}
+.nxLiveList,.nxLiveDetail{min-width:0;width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+.nxLiveItem{position:relative;min-width:0;box-sizing:border-box;overflow:hidden}
+.nxLiveItem strong{display:block;max-width:100%;overflow-wrap:anywhere}
+.nxLiveItem time{float:none;display:block;margin-top:4px;white-space:normal;text-align:left}
+.nxLiveItem p{white-space:normal;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.6}
+.nxSource p,.nxDraft p{overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap}
+.nxLiveDetail>.nxPrimary{max-width:100%;white-space:normal;justify-content:center;text-align:center}
+.nxQueue{min-width:0;overflow:hidden}
+.nxQueue>div{grid-template-columns:minmax(85px,120px) minmax(0,1fr) minmax(75px,100px)}
+.nxQueue>div>span,.nxQueue>div>small{min-width:0;overflow-wrap:anywhere}
+@media(max-width:1050px){.nxLiveGrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:680px){.nxTestGrid>.nxUnderPanel{grid-column:1}.nxTestGrid>.nxUnderPanel .nxPanelHeading{align-items:flex-start;flex-wrap:wrap}.nxLiveGrid{gap:12px}.nxLiveList,.nxLiveDetail{padding:12px;min-height:160px}.nxQueue>div{grid-template-columns:minmax(0,1fr);gap:5px}.nxQueue small{text-align:left}}
