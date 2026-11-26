@@ -1,6 +1,7 @@
 import {NextRequest,NextResponse} from "next/server";
 import {effectiveAccountSecret} from "../../../lib/credential-vault";
 import {recordUsage} from "../../../lib/ai-usage";
+import {checkAiBudget} from "../../../lib/ai-budget";
 import {allowedChats,bridgeDatabase} from "../../../lib/group-bridge";
 export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
@@ -51,6 +52,12 @@ export async function POST(req:NextRequest){
   }
   if(!key){key=process.env.OPENAI_API_KEY||null;billedAccountId=key?"__server_default__":"";}
   if(!key)return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"등록된 계정별 OpenAI 키나 서버 기본 API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});
+  if(billedAccountId){
+   try{
+    const budget=await checkAiBudget(billedAccountId);
+    if(!budget.ok)return NextResponse.json({error:budget.message||"API 사용 한도를 초과했습니다.",code:"AI_BUDGET_LIMIT"},{status:429});
+   }catch{return NextResponse.json({error:"API 사용 한도를 확인하지 못했습니다. 요청을 중단했습니다."},{status:503});}
+  }
   const description=[
     "당신은 비공개 AI 투자 커뮤니티 시뮬레이션의 대화 디렉터입니다.",
     "입력된 사람의 발언이 있다면 그 내용을 핵심으로 삼아 일반 참여자들의 후속 반응을 만드세요.",
