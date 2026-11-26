@@ -15,7 +15,7 @@ const labels:{field:Field;label:string;tip:string;hint:string}[]=[
  {field:"openaiApiKey",label:"OpenAI API 키",tip:"이 계정의 AI 응답 생성에 사용하는 API 키",hint:"sk-..."}
 ];
 const empty:Status={telegramApiId:false,telegramApiHash:false,telegramSession:false,openaiApiKey:false,updatedAt:null};
-export default function AccountCredentials({accountId}:{accountId:string}){
+export default function AccountCredentials({accountId,onTelegramConnected}:{accountId:string;onTelegramConnected?:()=>void}){
  const [status,setStatus]=useState<Status>(empty);
  const [sources,setSources]=useState<Sources>(none);
  const [inputs,setInputs]=useState<Record<Field,string>>({telegramApiId:"",telegramApiHash:"",telegramSession:"",openaiApiKey:""});
@@ -43,6 +43,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
    const data=await res.json();
    if(!res.ok)throw Error(data.error||"저장 실패");
    setStatus(data.status);setSources(data.sources||none);
+   if(field==="telegramSession"&&value!==null)onTelegramConnected?.();
    setInputs(prev=>({...prev,[field]:""}));
    setNotice(value===null?"해당 인증정보를 해제했습니다.":"암호화 저장했습니다. 입력한 키는 다시 표시하지 않습니다.");
   }catch(e){setNotice(e instanceof Error?e.message:"저장 실패")}
@@ -68,7 +69,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
  return <section className="nxCredentialPanel">
    <div className="nxCredentialHead"><div><strong><KeyRound size={17}/> 계정별 API 연결</strong><p><b>{accountId}</b> 계정만의 인증정보를 등록합니다.</p></div><span className="nxCredentialSecure"><Lock size={13}/> 서버 암호화</span></div>
    <div className="nxTelegramMode"><strong>텔레그램 계정 로그인 방식</strong><div><button className={loginMode==="phone"?"active":""} onClick={()=>setLoginMode("phone")}>전화번호로 일반 로그인</button><button className={loginMode==="session"?"active":""} onClick={()=>setLoginMode("session")}>기존 세션 직접 입력</button></div></div>
-   <div className="nxCredentialFields">{labels.map(row=>row.field==="telegramSession"&&loginMode==="phone"?<div className="nxCredentialField" key={row.field}><TelegramPhoneLogin accountId={accountId} onConnected={()=>{void refreshCredentialStatus()}}/></div>:<div className="nxCredentialField" key={row.field}>
+   <div className="nxCredentialFields">{labels.map(row=>row.field==="telegramSession"&&loginMode==="phone"?<div className="nxCredentialField" key={row.field}><TelegramPhoneLogin accountId={accountId} onConnected={()=>{void refreshCredentialStatus();onTelegramConnected?.()}}/></div>:<div className="nxCredentialField" key={row.field}>
     <div className="nxCredentialLabel"><strong>{row.label}</strong><span className={sources[row.field]!=="none"?"nxCredentialOn":"nxCredentialOff"}>{loading?"확인 중":sources[row.field]==="custom"?"개별 설정":sources[row.field]==="default"?"전체 기본값 사용":"미설정"}</span></div>
     <p>{row.tip}</p>
     <div className="nxCredentialControls">
