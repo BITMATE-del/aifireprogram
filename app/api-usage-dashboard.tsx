@@ -3,6 +3,7 @@ import {useEffect,useState} from "react";
 import {Activity,ArrowUpRight,BarChart3,BrainCircuit,CheckCircle2,Clock3,KeyRound,RefreshCw,ShieldCheck,Wallet} from "lucide-react";
 import AccountCredentials from "./account-credentials";
 import DefaultCredentials from "./default-credentials";
+import AiBudgetPanel from "./ai-budget-panel";
 
 type Account={id:string;name:string;enabled:boolean};
 type Totals={requests:number;prompt_tokens:string;completion_tokens:string;cached_tokens:string;estimated_usd:number;unknown_cost_requests:number};
@@ -45,6 +46,7 @@ export default function ApiUsageDashboard({accounts,selectedAccount,onSelect}:{
    {tab==="usage"&&<div className="nxUsageContent">
     <div className="nxUsageFilters"><label>조회 계정<select value={scope} onChange={e=>setScope(e.target.value)}><option value="all">전체 계정</option><option value="__server_default__">서버 기본 API 키</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><button onClick={()=>void query(scope)} disabled={loading}><RefreshCw size={15}/>{loading?"조회 중":"새로고침"}</button></div>
     {error&&<div className="nxNotice">{error}</div>}
+    <AiBudgetPanel key={scope} accountId={scope==="all"?"__server_default__":scope}/>
     {usage&&<>
       <div className="nxUsageCards">
         <div><span>오늘 예상 사용금액</span><strong>{usd(usage.today.estimated_usd)}</strong><small>{tokens(usage.today.requests)}회 API 요청</small></div>
