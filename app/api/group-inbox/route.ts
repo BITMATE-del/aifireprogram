@@ -1,6 +1,7 @@
+import {createHash} from "node:crypto";
 import {sameSiteRequest} from "../../../lib/request-origin";
 import {NextRequest,NextResponse} from "next/server";
-import {allowedChats,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
+import {allowedChats,bridgeDatabase,flagUnconfirmedSends,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const answer=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{"Cache-Control":"no-store"}});
@@ -8,6 +9,7 @@ export async function GET(req:NextRequest){
  const chatId=safeChatId(req.nextUrl.searchParams.get("chatId"));
  if(!chatId||!allowedChats().has(chatId))return answer({connected:false,messages:[],drafts:[],error:"그룹 ID가 허용 목록에 등록되어 있지 않습니다."},200);
  try{
+  await flagUnconfirmedSends();
   const db=await bridgeDatabase();
   const [messages,drafts,workers]=await Promise.all([
     db.query(`SELECT id,chat_id,message_id,sender_id,sender_name,body,observed_at
@@ -38,8 +40,10 @@ export async function POST(req:NextRequest){
   const src=await db.query("SELECT message_id FROM moment_group_inbox WHERE chat_id=$1 AND message_id=$2",[chatId,messageId]);
   if(!src.rowCount)return answer({error:"원본 그룹 메시지를 찾지 못했습니다."},404);
   // Operator approval; never infer approval from AI generation alone.
-  const result=await db.query(`INSERT INTO moment_group_outbox(account_id,chat_id,reply_to_message_id,body)
-    VALUES($1,$2,$3,$4) RETURNING id,status`,[accountId,chatId,messageId,text]);
+  const key=createHash("sha256").update(JSON.stringify([accountId,chatId,messageId,text])).digest("hex");
+  const result=await db.query(`INSERT INTO moment_group_outbox(account_id,chat_id,reply_to_message_id,body,idempotency_key)
+    VALUES($1,$2,$3,$4,$5) ON CONFLICT(idempotency_key) DO NOTHING RETURNING id,status`,[accountId,chatId,messageId,text,key]);
+  if(!result.rows.length)return answer({error:"동일 계정·원본 메시지·답변의 전송 승인이 이미 존재합니다. 중복 발송하지 않았습니다.",code:"DUPLICATE_APPROVAL"},409);
   return answer({ok:true,id:result.rows[0].id,status:result.rows[0].status});
  }catch{return answer({error:"전송 승인 저장에 실패했습니다."},503);}
 }
