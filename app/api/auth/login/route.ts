@@ -1,11 +1,11 @@
+import {sameSiteRequest} from "../../../../lib/request-origin";
 import { NextRequest, NextResponse } from "next/server";
 import { createSession } from "../../../../lib/auth";
 import { timingSafeEqual } from "node:crypto";
 import {loginAllowed,loginFailed,loginSucceeded} from "../../../../lib/login-throttle";
 export async function POST(req:NextRequest) {
  const password=process.env.ADMIN_PASSWORD,secret=process.env.AUTH_SECRET;
- const origin=req.headers.get("origin");
- if(origin&&origin!==req.nextUrl.origin)return NextResponse.json({error:"잘못된 요청 출처입니다."},{status:403});
+ if(!sameSiteRequest(req))return NextResponse.json({error:"잘못된 요청 출처입니다."},{status:403});
  const ip=(req.headers.get("x-real-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]||"unknown").trim().slice(0,80);
  const rate=loginAllowed(ip);
  if(!rate.allowed)return NextResponse.json({error:"로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요."},{status:429,headers:{"Retry-After":String(rate.retryAfter)}});
