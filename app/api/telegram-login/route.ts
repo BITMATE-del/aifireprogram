@@ -14,11 +14,12 @@ export async function GET(req:NextRequest){
  if(!validId(id))return result({error:"계정을 선택하세요."},400);
  try{
   const db=await loginDb();
-  const {rows}=await db.query("SELECT phase,message,expires_at FROM moment_telegram_login WHERE account_id=$1",[id]);
+  const {rows}=await db.query("SELECT phase,message,expires_at,updated_at FROM moment_telegram_login WHERE account_id=$1",[id]);
   const r=rows[0];
   const expired=r&&new Date(r.expires_at).getTime()<=Date.now();
-  const phase=expired&&r.phase!=="connected"?"error":r?.phase||"idle";
-  return result({phase,message:expired?"인증 시간이 만료됐습니다. 다시 시작하세요.":r?.message||null,connected:(await credentialsStatus(id)).telegramSession});
+  const stalled=r&&r.phase==="processing"&&new Date(r.updated_at).getTime()<Date.now()-90000;
+  const phase=(expired&&r.phase!=="connected")||stalled?"error":r?.phase||"idle";
+  return result({phase,message:expired?"인증 시간이 만료됐습니다. 다시 시작하세요.":stalled?"인증 연결이 중단됐습니다. 처음부터 다시 진행하세요.":r?.message||null,connected:(await credentialsStatus(id)).telegramSession});
  }catch{return result({error:"인증 상태를 확인할 수 없습니다."},503)}
 }
 export async function POST(req:NextRequest){
@@ -46,16 +47,20 @@ export async function POST(req:NextRequest){
   if(body.action==="code"){
    const code=String(body.code||"").trim().replace(/\s/g,"");
    if(!/^\d{4,8}$/.test(code))return result({error:"텔레그램에서 받은 숫자 인증코드를 입력하세요."},400);
+   const attempts=await db.query("SELECT attempts FROM moment_telegram_login WHERE account_id=$1 AND phase='code_sent'",[accountId]);
+   if(!attempts.rowCount||Number(attempts.rows[0].attempts)>=8)return result({error:"인증 입력 횟수를 초과했습니다. 처음부터 다시 진행하세요."},429);
    const cipher=encryptTransientSecret(code);
-   const r=await db.query(`UPDATE moment_telegram_login SET phase='pending',action='code',payload_cipher=$2,updated_at=now(),message=NULL
+   const r=await db.query(`UPDATE moment_telegram_login SET phase='pending',action='code',payload_cipher=$2,attempts=attempts+1,updated_at=now(),message=NULL
    WHERE account_id=$1 AND phase='code_sent' AND expires_at>now() RETURNING request_id`,[accountId,cipher]);
    if(!r.rowCount)return result({error:"인증코드 요청 단계가 아닙니다. 상태를 확인하거나 처음부터 진행하세요."},409);
    return result({ok:true,phase:"pending"});
   }
   if(body.action==="password"){
+   const attempts=await db.query("SELECT attempts FROM moment_telegram_login WHERE account_id=$1 AND phase='password_required'",[accountId]);
+   if(!attempts.rowCount||Number(attempts.rows[0].attempts)>=8)return result({error:"인증 입력 횟수를 초과했습니다. 처음부터 다시 진행하세요."},429);
    const pass=String(body.password||"");
    if(pass.length<1||pass.length>256)return result({error:"텔레그램 2단계 비밀번호를 확인하세요."},400);
-   const r=await db.query(`UPDATE moment_telegram_login SET phase='pending',action='password',payload_cipher=$2,updated_at=now(),message=NULL
+   const r=await db.query(`UPDATE moment_telegram_login SET phase='pending',action='password',payload_cipher=$2,attempts=attempts+1,updated_at=now(),message=NULL
    WHERE account_id=$1 AND phase='password_required' AND expires_at>now() RETURNING request_id`,[accountId,encryptTransientSecret(pass)]);
    if(!r.rowCount)return result({error:"2단계 비밀번호 입력 단계가 아닙니다."},409);
    return result({ok:true,phase:"pending"});
