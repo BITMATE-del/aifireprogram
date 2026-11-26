@@ -1,103 +1,178 @@
-"""Private, account-owner-authorized Telegram group bridge.
-All outgoing messages require explicit approval in the admin console.
-One deployment = one owned Telegram account; no session secrets are logged.
+"""Multi-account, opt-in Telegram worker for Moment Studio.
+
+Telegram credentials are configured per account on the admin website.
+Secrets never appear in server logs. Only explicitly approved replies are sent.
 """
 import asyncio
+import hashlib
 import logging
 import os
+from dataclasses import dataclass, field
+
 from aiohttp import ClientSession, ClientTimeout
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError, RPCError
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"),format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
 log=logging.getLogger("moment.bridge")
-
-API_ID=int(os.environ["TELEGRAM_API_ID"])
-API_HASH=os.environ["TELEGRAM_API_HASH"]
-SESSION=os.environ["TELEGRAM_STRING_SESSION"]
-ACCOUNT_ID=os.environ["TELEGRAM_ACCOUNT_ID"]
-BRIDGE_KEY=os.environ["TELEGRAM_BRIDGE_KEY"]
 BASE=os.environ["MOMENT_BASE_URL"].rstrip("/")
-CHATS={int(part.strip()) for part in os.environ["TELEGRAM_ALLOWED_CHAT_IDS"].split(",") if part.strip()}
-POLL_SECONDS=max(3,int(os.getenv("BRIDGE_POLL_SECONDS","8")))
+BRIDGE_KEY=os.environ["TELEGRAM_BRIDGE_KEY"]
+if len(BRIDGE_KEY)<32 or not BASE.startswith("https://"):
+    raise RuntimeError("Secure bridge key (32+ characters) and HTTPS base URL are required")
+POLL_SECONDS=max(5,int(os.getenv("BRIDGE_POLL_SECONDS","8")))
+REFRESH_SECONDS=max(30,int(os.getenv("ACCOUNT_REFRESH_SECONDS","60")))
+HEADERS={"x-bridge-key":BRIDGE_KEY}
 
-if len(BRIDGE_KEY)<32:
-    raise RuntimeError("TELEGRAM_BRIDGE_KEY needs at least 32 characters")
-if not CHATS:
-    raise RuntimeError("No allowed chat IDs configured")
-if not BASE.startswith("https://"):
-    raise RuntimeError("MOMENT_BASE_URL must be HTTPS")
 
-headers={"x-bridge-key":BRIDGE_KEY}
-client=TelegramClient(StringSession(SESSION),API_ID,API_HASH,auto_reconnect=True)
+@dataclass
+class Connection:
+    account_id:str
+    fingerprint:str
+    client:TelegramClient
+    chat_ids:set[int]=field(default_factory=set)
+    user_id:int=0
 
-async def submit(session, payload):
-    async with session.post(BASE+"/api/bridge",json=payload,headers=headers) as res:
-        if res.status!=200:
-            log.warning("bridge POST failed, status=%s",res.status)
-            return None
-        return await res.json()
 
-async def pump(session):
-    while True:
-        for chat_id in CHATS:
-            await submit(session,{"type":"heartbeat","accountId":ACCOUNT_ID,"chatId":str(chat_id)})
-            try:
-                async with session.get(BASE+"/api/bridge",params={"accountId":ACCOUNT_ID,"chatId":str(chat_id)},headers=headers) as res:
-                    if res.status!=200:
-                        log.warning("bridge poll failed status=%s",res.status)
-                        continue
-                    result=await res.json()
-                job=result.get("job")
-                if not job:
-                    continue
-                try:
-                    sent=await client.send_message(chat_id,str(job["body"]),reply_to=int(job["reply_to_message_id"]))
-                    await submit(session,{"type":"ack","accountId":ACCOUNT_ID,"chatId":str(chat_id),"jobId":int(job["id"]),"sent":True,"sentMessageId":sent.id})
-                    log.info("approved reply sent, job id=%s",job["id"])
-                except FloodWaitError as exc:
-                    await submit(session,{"type":"ack","accountId":ACCOUNT_ID,"chatId":str(chat_id),"jobId":int(job["id"]),"sent":False,"error":"Telegram rate-limit, retry not automatic"})
-                    log.warning("Telegram rate-limited, sleeping %s seconds",exc.seconds)
-                    await asyncio.sleep(exc.seconds)
-                except RPCError as exc:
-                    await submit(session,{"type":"ack","accountId":ACCOUNT_ID,"chatId":str(chat_id),"jobId":int(job["id"]),"sent":False,"error":type(exc).__name__})
-                    log.warning("Telegram API rejected approved reply: %s",type(exc).__name__)
-                except Exception as exc:
-                    # Fail closed; no retry after uncertain send result to avoid duplicates.
-                    await submit(session,{"type":"ack","accountId":ACCOUNT_ID,"chatId":str(chat_id),"jobId":int(job["id"]),"sent":False,"error":type(exc).__name__})
-                    log.exception("reply failed")
-            except Exception:
-                log.exception("bridge polling error")
-        await asyncio.sleep(POLL_SECONDS)
+async def bridge_json(session:ClientSession,method:str,path:str,**kwargs):
+    try:
+        async with session.request(method,BASE+path,headers=HEADERS,**kwargs) as response:
+            if response.status!=200:
+                log.warning("bridge %s %s returned HTTP %s",method,path,response.status)
+                return None
+            return await response.json()
+    except Exception as exc:
+        log.warning("bridge unavailable: %s",type(exc).__name__)
+        return None
 
-async def main():
-    await client.connect()
-    if not await client.is_user_authorized():
-        raise RuntimeError("Telegram session is not authorized; authenticate it locally first")
-    self_user=await client.get_me()
-    log.info("Authorized Telegram account connected (numeric user id=%s)",self_user.id)
-    await client.get_dialogs() # Cache group entities for reply resolution.
-    timeout=ClientTimeout(total=20)
-    async with ClientSession(timeout=timeout) as session:
+
+async def connect_account(session:ClientSession,entry:dict,fingerprint:str):
+    account_id=str(entry["accountId"])
+    client=TelegramClient(StringSession(entry["telegramSession"]),int(entry["telegramApiId"]),entry["telegramApiHash"],
+                          auto_reconnect=True,connection_retries=3,request_retries=2)
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            raise RuntimeError("Account session not authorized")
+        user=await client.get_me()
+        chat_ids=set(int(cid) for cid in entry["chatIds"])
+        connection=Connection(account_id,fingerprint,client,chat_ids,user.id)
+        await client.get_dialogs()
+
         @client.on(events.NewMessage(incoming=True))
         async def on_message(event):
-            if event.chat_id not in CHATS or not event.is_group or not event.raw_text:
+            if event.chat_id not in connection.chat_ids or not event.is_group or not event.raw_text:
                 return
-            if event.sender_id==self_user.id or getattr(event.sender,"bot",False):
+            if event.sender_id==connection.user_id:
                 return
-            sender_name=""
             try:
                 sender=await event.get_sender()
-                sender_name=(" ".join(filter(None,[getattr(sender,"first_name",""),getattr(sender,"last_name","")])) or getattr(sender,"username","") or "참여자")[:100]
+                if getattr(sender,"bot",False):
+                    return
+                name=(" ".join(filter(None,[getattr(sender,"first_name",""),getattr(sender,"last_name","")])) or
+                      getattr(sender,"username","") or "참여자")[:100]
             except Exception:
-                sender_name="참여자"
-            await submit(session,{
-                "type":"message","accountId":ACCOUNT_ID,"chatId":str(event.chat_id),
+                name="참여자"
+            await bridge_json(session,"POST","/api/bridge",json={
+                "type":"message","accountId":connection.account_id,"chatId":str(event.chat_id),
                 "messageId":int(event.id),"senderId":str(event.sender_id),
-                "senderName":sender_name,"text":event.raw_text[:1500]
+                "senderName":name,"text":event.raw_text[:1500]
             })
-        await pump(session)
+        log.info("Telegram account connected: %s (%s authorized groups)",account_id,len(chat_ids))
+        return connection
+    except Exception as exc:
+        log.warning("Account %s connection failed (%s)",account_id,type(exc).__name__)
+        await client.disconnect()
+        return None
+
+
+async def update_accounts(session:ClientSession,connections:dict[str,Connection]):
+    payload=await bridge_json(session,"GET","/api/bridge/accounts")
+    if payload is None:
+        return
+    incoming=payload.get("accounts",[])
+    if not isinstance(incoming,list):
+        return
+    valid={}
+    for entry in incoming:
+        try:
+            account_id=str(entry["accountId"])
+            if not (entry.get("telegramApiId") and entry.get("telegramApiHash") and entry.get("telegramSession")):
+                continue
+            fingerprint=hashlib.sha256((entry["telegramApiId"]+"|"+entry["telegramApiHash"]+"|"+entry["telegramSession"]).encode()).hexdigest()
+            valid[account_id]=(entry,fingerprint)
+        except (KeyError,TypeError):
+            continue
+    for account_id,connection in list(connections.items()):
+        if account_id not in valid or connection.fingerprint!=valid[account_id][1] or not connection.client.is_connected():
+            await connection.client.disconnect()
+            del connections[account_id]
+        else:
+            connection.chat_ids=set(int(c) for c in valid[account_id][0]["chatIds"])
+    for account_id,(entry,fingerprint) in valid.items():
+        if account_id in connections:
+            continue
+        connection=await connect_account(session,entry,fingerprint)
+        if connection:
+            connections[account_id]=connection
+
+
+async def deliver_approved(session:ClientSession,connection:Connection,chat_id:int):
+    result=await bridge_json(session,"GET","/api/bridge",params={"accountId":connection.account_id,"chatId":str(chat_id)})
+    if not result:
+        return
+    job=result.get("job")
+    if not job:
+        return
+    job_id=int(job["id"])
+    try:
+        # Transparency: these messages come from a declared AI simulation.
+        body="[AI 시뮬레이션] "+str(job["body"])
+        message=await connection.client.send_message(chat_id,body,reply_to=int(job["reply_to_message_id"]))
+        await bridge_json(session,"POST","/api/bridge",json={
+            "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
+            "jobId":job_id,"sent":True,"sentMessageId":message.id
+        })
+        log.info("Approved AI reply sent; account=%s job=%s",connection.account_id,job_id)
+    except FloodWaitError as exc:
+        await bridge_json(session,"POST","/api/bridge",json={
+            "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
+            "jobId":job_id,"sent":False,"error":"FLOOD_WAIT"
+        })
+        log.warning("Rate limited for %s seconds on %s",exc.seconds,connection.account_id)
+        await asyncio.sleep(min(exc.seconds,3600))
+    except (RPCError,Exception) as exc:
+        await bridge_json(session,"POST","/api/bridge",json={
+            "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
+            "jobId":job_id,"sent":False,"error":type(exc).__name__
+        })
+        log.warning("Approved reply failed; account=%s job=%s error=%s",
+                    connection.account_id,job_id,type(exc).__name__)
+
+
+async def run():
+    connections:dict[str,Connection]={}
+    timeout=ClientTimeout(total=25)
+    async with ClientSession(timeout=timeout) as session:
+        next_refresh=0.0
+        while True:
+            try:
+                now=asyncio.get_running_loop().time()
+                if now>=next_refresh:
+                    await update_accounts(session,connections)
+                    next_refresh=now+REFRESH_SECONDS
+                    if not connections:
+                        log.info("No active Telegram account yet. Configure credentials in the admin site.")
+                for connection in list(connections.values()):
+                    for chat_id in list(connection.chat_ids):
+                        await bridge_json(session,"POST","/api/bridge",json={
+                            "type":"heartbeat","accountId":connection.account_id,"chatId":str(chat_id)
+                        })
+                        await deliver_approved(session,connection,chat_id)
+            except Exception as exc:
+                log.warning("Worker cycle error: %s",type(exc).__name__)
+            await asyncio.sleep(POLL_SECONDS)
+
 
 if __name__=="__main__":
-    asyncio.run(main())
+    asyncio.run(run())
