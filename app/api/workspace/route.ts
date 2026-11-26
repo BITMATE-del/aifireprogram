@@ -1,3 +1,4 @@
+import {sameSiteRequest} from "../../../lib/request-origin";
 import {NextRequest,NextResponse} from "next/server";
 import {database,databaseConfigured,validateState} from "../../../lib/workspace-db";
 export const runtime="nodejs";
@@ -13,8 +14,7 @@ export async function GET(){
 }
 export async function PUT(req:NextRequest){
  if(!databaseConfigured())return NextResponse.json({error:"DATABASE_URL 미설정"},{status:503});
- const origin=req.headers.get("origin");
- if(origin&&origin!==req.nextUrl.origin)return NextResponse.json({error:"요청 출처가 올바르지 않습니다."},{status:403});
+ if(!sameSiteRequest(req))return NextResponse.json({error:"요청 출처가 올바르지 않습니다."},{status:403});
  try{
   const raw=await req.text();
   if(raw.length>1_500_000)return NextResponse.json({error:"저장 데이터가 너무 큽니다."},{status:413});
