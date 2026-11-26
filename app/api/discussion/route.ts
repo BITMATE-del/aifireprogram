@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from "next/server";
 import {accountSecret} from "../../../lib/credential-vault";
+import {recordUsage} from "../../../lib/ai-usage";
 export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
 type Turn={speakerId:string;speaker:string;text:string};
@@ -29,8 +30,9 @@ export async function POST(req:NextRequest){
   const preferred=str(input?.credentialAccountId,120);
   const lookupIds=preferred?[preferred,...accountIds.filter(x=>x!==preferred)]:accountIds;
   let key:string|null=null;
-  for(const accountId of lookupIds){try{key=await accountSecret(accountId,"openaiApiKey")}catch{}if(key)break;}
-  key=key||process.env.OPENAI_API_KEY||null;
+  let billedAccountId="";
+  for(const accountId of lookupIds){try{key=await accountSecret(accountId,"openaiApiKey")}catch{}if(key){billedAccountId=accountId;break;}}
+  if(!key){key=process.env.OPENAI_API_KEY||null;billedAccountId=key?"__server_default__":"";}
   if(!key)return NextResponse.json({mode:"sample",turns:sample(topic,people,human),notice:"등록된 계정별 OpenAI 키나 서버 기본 API 키가 없어 샘플 반응을 표시합니다. 실제 AI 대화가 아닙니다."},{headers:{"Cache-Control":"no-store"}});
   const description=[
     "당신은 비공개 AI 투자 커뮤니티 시뮬레이션의 대화 디렉터입니다.",
@@ -60,6 +62,22 @@ export async function POST(req:NextRequest){
   });
   if(!response.ok)return NextResponse.json({error:response.status===429?"AI API 요청 한도에 도달했습니다.":"AI 모델 호출에 실패했습니다. 서버 모델 및 API 설정을 확인하세요.",status:response.status},{status:502});
   const result=await response.json();
+  // Record the provider-reported usage, even if the generated JSON later fails parsing.
+  const usage=result?.usage;
+  if(usage&&Number.isFinite(usage.prompt_tokens)&&Number.isFinite(usage.completion_tokens)){
+   try{
+    await recordUsage({
+      accountId:billedAccountId||"__server_default__",
+      groupId:str(input?.groupId,120),
+      model:String(result?.model||process.env.OPENAI_MODEL||"gpt-4o-mini"),
+      requestId:typeof result?.id==="string"?result.id:null,
+      prompt:Math.max(0,Math.trunc(usage.prompt_tokens)),
+      completion:Math.max(0,Math.trunc(usage.completion_tokens)),
+      cached:Math.max(0,Math.trunc(usage.prompt_tokens_details?.cached_tokens||0))
+    });
+   }catch(error){console.error("AI usage ledger write failed",error instanceof Error?error.name:"unknown");}
+  }
+
   let parsed:{turns?:{speakerId?:unknown;text?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
   const lookup=new Map(people.filter(p=>p.participationRole!=="observer").map(p=>[p.id,p.name]));
