@@ -104,3 +104,12 @@
 .nxConnectionState{display:flex;align-items:center;gap:9px;color:#217969;font-size:14px}.nxConnectionDetails{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.nxConnectionDetails span{display:flex;justify-content:space-between;background:white;padding:10px;border-radius:7px;font-size:11px;color:#688580}.nxConnectionDetails b{color:#326f64}
 .nxConnectionSummary p,.nxConnectionSummary small{margin:0;font-size:11px;color:#78938f}
 @media(max-width:600px){.nxConnectionDetails{grid-template-columns:1fr}}
+
+.nxDiscoveredGroups{background:#fff;border:1px solid #e2e9eb;border-radius:12px;padding:19px;margin-top:17px}
+.nxDiscoverRow{display:flex;align-items:center;gap:11px;padding:13px 0;border-bottom:1px solid #e9eeee}
+.nxDiscoverRow>div{flex:1;min-width:0}.nxDiscoverRow strong,.nxDiscoverRow small{display:block}
+.nxDiscoverRow strong{font-size:12px;color:#3d5861}.nxDiscoverRow small{font-size:11px;color:#91a5ab;margin-top:4px}
+.nxDiscoverRow>button{border:1px solid #cde3d7;border-radius:8px;background:#f0f9f3;color:#257d6b;padding:9px 10px;font-size:11px;font-weight:700;display:flex;gap:5px;align-items:center}
+.nxDiscoverRow>button:disabled{opacity:.52}
+.nxDiscoveredGroups>.nxGlobalInfo{margin-top:14px}
+@media(max-width:600px){.nxDiscoverRow{flex-wrap:wrap}.nxDiscoverRow>div{min-width:60%}}
