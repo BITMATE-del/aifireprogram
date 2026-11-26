@@ -1,3 +1,4 @@
+import {sameSiteRequest} from "../../../lib/request-origin";
 import {NextRequest,NextResponse} from "next/server";
 import {allowedChats,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 export const runtime="nodejs";
@@ -19,8 +20,7 @@ export async function GET(req:NextRequest){
  }catch{return answer({error:"메시지 조회에 실패했습니다."},503);}
 }
 export async function POST(req:NextRequest){
- const origin=req.headers.get("origin");
- if(origin&&origin!==req.nextUrl.origin)return answer({error:"요청 출처 오류"},403);
+ if(!sameSiteRequest(req))return answer({error:"요청 출처 오류"},403);
  let body:{chatId?:unknown;accountId?:unknown;messageId?:unknown;text?:unknown};
  try{const raw=await req.text();if(raw.length>4000)return answer({error:"메시지가 너무 깁니다."},413);body=JSON.parse(raw)}
  catch{return answer({error:"요청 형식 오류"},400)}
