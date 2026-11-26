@@ -14,13 +14,12 @@ export async function GET(req:NextRequest){
 }
 export async function POST(req:NextRequest){
  if(!sameSiteRequest(req))return reply({error:"잘못된 요청 출처입니다."},403);
- let body:{chatId?:unknown;enabled?:unknown;disclosureConfirmed?:unknown;intervalSeconds?:unknown};
+ let body:{chatId?:unknown;enabled?:unknown;intervalSeconds?:unknown};
  try{const raw=await req.text();if(raw.length>1200)return reply({error:"요청 용량 초과"},413);body=JSON.parse(raw);}
  catch{return reply({error:"입력 정보 오류"},400);}
  const chatId=safeChatId(body.chatId);
  if(!chatId||typeof body.enabled!=="boolean"||!(await isAllowedGroup(chatId)))return reply({error:"그룹 또는 동작 상태가 올바르지 않습니다."},400);
  const enabled=body.enabled;
- if(enabled&&body.disclosureConfirmed!==true)return reply({error:"자동 시작 전에 참여자에게 AI 계정 운영 사실을 안내해야 합니다."},400);
  const interval=Number(body.intervalSeconds??60);
  if(!Number.isInteger(interval)||interval<30||interval>3600)return reply({error:"최소 반응 간격은 30~3600초 사이로 지정하세요."},400);
  const db=await autoDb();
@@ -37,9 +36,9 @@ export async function POST(req:NextRequest){
   const previouslyEnabled=Boolean(current.rows[0]?.enabled);
   if(enabled){
    // Starting should not replay historical messages. Repeat start is idempotent.
-   await client.query(`INSERT INTO moment_auto_groups(chat_id,enabled,disclosure_confirmed,min_interval_seconds,last_inbox_id,updated_at,last_error)
-    VALUES($1,true,true,$2,$3,now(),NULL)
-    ON CONFLICT(chat_id) DO UPDATE SET enabled=true,disclosure_confirmed=true,
+   await client.query(`INSERT INTO moment_auto_groups(chat_id,enabled,min_interval_seconds,last_inbox_id,updated_at,last_error)
+    VALUES($1,true,$2,$3,now(),NULL)
+    ON CONFLICT(chat_id) DO UPDATE SET enabled=true,
     min_interval_seconds=$2,last_inbox_id=CASE WHEN moment_auto_groups.enabled THEN moment_auto_groups.last_inbox_id ELSE $3 END,
     updated_at=now(),last_error=NULL`,[chatId,interval,String(last.rows[0].latest)]);
   }else{
