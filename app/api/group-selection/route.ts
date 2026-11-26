@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from "next/server";
 import {sameSiteRequest} from "../../../lib/request-origin";
 import {bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 import {validateState} from "../../../lib/workspace-db";
+import {credentialsStatus} from "../../../lib/credential-vault";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{"Cache-Control":"no-store"}});
@@ -21,7 +22,15 @@ export async function POST(req:NextRequest){
   const state=validateState(current.rows[0].content);
   if(!state){await client.query("ROLLBACK");return json({error:"서버 설정 형식이 올바르지 않습니다."},503)}
   const account=state.accounts.find((a:unknown)=>a&&typeof a==="object"&&(a as {id?:unknown}).id===accountId);
-  if(!account){await client.query("ROLLBACK");return json({error:"서버에 등록되지 않은 계정입니다. 계정을 서버에 저장하세요."},409)}
+  if(!account){
+   // A newly authenticated owner account might not have been manually saved
+   // from its browser yet. Bootstrap only the known credential-bearing account.
+   const credentials=await credentialsStatus(accountId);
+   if(!credentials.telegramSession){await client.query("ROLLBACK");return json({error:"먼저 텔레그램 계정 로그인을 완료하세요."},403)}
+   if(state.accounts.length>=500){await client.query("ROLLBACK");return json({error:"계정 등록 한도를 초과했습니다."},400)}
+   state.accounts.push({id:accountId,name:accountId,note:"텔레그램에서 확인된 계정",enabled:true});
+  }
+  if(account&&(account as {enabled?:boolean}).enabled===false){await client.query("ROLLBACK");return json({error:"일시중지된 계정은 그룹을 배정할 수 없습니다."},403)}
   const found=await client.query("SELECT title FROM moment_discovered_groups WHERE account_id=$1 AND chat_id=$2",[accountId,chatId]);
   if(!found.rowCount){await client.query("ROLLBACK");return json({error:"로그인한 계정에서 발견되지 않은 그룹입니다. 목록을 새로고침하세요."},404)}
   type Assignment={accountId:string;groupId:string;personaId:string;mode:"member"|"expert"|"observer"};
