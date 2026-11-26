@@ -4,7 +4,8 @@ import {Activity,CheckCircle2,PauseCircle,PlayCircle,RefreshCw,ShieldCheck,WifiO
 
 type InboxMessage={id:string;chat_id:string;message_id:string;sender_name:string;body:string;observed_at:string};
 type Outgoing={id:string;account_id:string;body:string;status:string;last_error:string|null};
-type Runtime={chatId:string;enabled:boolean;disclosureConfirmed:boolean;intervalSeconds:number;lastError:string|null;lastGeneratedAt:string|null};
+type DirectorDecision={type:string|null;reason:string|null;accounts:string[]|null;status:string;completed_at:string|null;claimed_at:string};
+type Runtime={chatId:string;enabled:boolean;disclosureConfirmed:boolean;intervalSeconds:number;lastError:string|null;lastGeneratedAt:string|null;decisions?:DirectorDecision[]};
 const stateLabel=(s:string)=>s==="pending"?"발송 대기":s==="sending"?"발송 중":s==="sent"?"전송 완료":s==="failed"?"전송 확인 필요":s==="cancelled"?"취소됨":s;
 export default function GroupLiveInbox({groupId}:{groupId:string}){
  const [messages,setMessages]=useState<InboxMessage[]>([]);
@@ -73,6 +74,14 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
   </div>
   {runtime?.lastError&&<div className="nxAutoError" role="alert">최근 AI 처리 오류: {runtime.lastError}</div>}
   {notice&&<div className="nxAutoNotice" role="status">{notice}</div>}
+  <div className="nxDirectorLog">
+   <div className="nxPanelHeading"><div><h3>대화 디렉터 판단 기록</h3><p>무반응도 정상 결과입니다. 최근에 어떤 이유로 말하거나 관망했는지 확인할 수 있습니다.</p></div></div>
+   {(runtime?.decisions||[]).length?(runtime?.decisions||[]).slice(0,6).map((d,i)=><div className="nxDirectorDecision" key={i}>
+    <strong>{d.type==="reply"?"대화 참여":d.type==="silent"?"관망":d.type==="people_continued"?"사람 대화 우선":d.type==="error"?"처리 오류":d.status==="processing"?"대화 판단 중":"반응 생략"}</strong>
+    <span>{d.reason||(d.status==="processing"?"":d.status)}</span>
+    <small>{d.accounts?.length?d.accounts.join(", ")+" · ":""}{new Date(d.completed_at||d.claimed_at).toLocaleString("ko-KR")}</small>
+   </div>):<p className="nxTip">아직 대화 판단 기록이 없습니다. 새 그룹 메시지가 들어오면 이곳에 표시됩니다.</p>}
+  </div>
   <div className="nxAutoHistory">
    <div className="nxAutoColumn"><h3>실제 그룹 수신 메시지 <small>{messages.length}건</small></h3>
     {messages.length?messages.slice(-15).reverse().map(m=><div className="nxAutoRecord" key={m.id}><strong>{m.sender_name||"참여자"} <time>{new Date(m.observed_at).toLocaleString("ko-KR")}</time></strong><p>{m.body}</p></div>):<p className="nxEmpty">새로 수신된 메시지가 없습니다. 연결 계정과 그룹 배정을 확인하세요.</p>}
