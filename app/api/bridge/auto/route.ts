@@ -11,7 +11,7 @@ type Assignment={accountId:string;groupId:string;personaId:string;mode:"member"|
 type Persona={id:string;name:string;role:string;style:string;risk:number;frequency?:"quiet"|"balanced"|"active";responseMode?:"reactive"|"balanced"|"independent";interests?:string};
 type Inbox={id:string;message_id:string;body:string;sender_name:string;observed_at:string};
 type Speaker=Persona&{id:string;accountId:string;participationRole:"member"|"expert"|"observer"};
-type Generated={mode?:string;decision?:string;decisionReason?:string;reason?:string;error?:string;turns?:{speakerId:string;text:string}[]};
+type Generated={mode?:string;decision?:string;decisionReason?:string;memorySummary?:string;reason?:string;error?:string;turns?:{speakerId:string;text:string}[]};
 
 export async function GET(req:NextRequest){
  if(!authorizedBridge(req))return respond({error:"인증 실패"},401);
@@ -93,8 +93,24 @@ export async function GET(req:NextRequest){
  try{
   // All available group personalities are given to ONE group director.
   // One judgment can choose silence, one speaker or a two-speaker exchange.
+  const [previousMemory,previousSpeeches]=await Promise.all([
+   db.query(`SELECT summary FROM moment_group_memory WHERE chat_id=$1
+     AND updated_at>now()-interval '14 days'`,[chatId]),
+   db.query(`SELECT account_id,body FROM moment_group_outbox
+     WHERE chat_id=$1 AND status='sent' AND created_at>now()-interval '7 days'
+      AND account_id=ANY($2::text[]) ORDER BY completed_at DESC LIMIT 24`,
+     [chatId,speakers.map(x=>x.accountId)])
+  ]);
+  const count=new Map<string,number>();
+  const accountPriorMessages=previousSpeeches.rows.flatMap((r:{account_id:string;body:string})=>{
+   const n=count.get(r.account_id)||0;
+   if(n>=2)return [];
+   count.set(r.account_id,n+1);
+   return [{accountId:r.account_id,text:String(r.body).slice(0,220)}];
+  });
   const input={director:true,groupId:chatId,topic:candidate.body,humanMessage:candidate.body,
-    inboxMessageId:candidate.id,credentialAccountId:accountId,personas:speakers};
+    inboxMessageId:candidate.id,credentialAccountId:accountId,personas:speakers,
+    groupMemory:previousMemory.rows[0]?.summary||"",accountPriorMessages};
   const internal=new NextRequest("https://internal.moment.invalid/api/discussion",{
    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)
   });
@@ -128,6 +144,11 @@ export async function GET(req:NextRequest){
    if(BigInt(String(latest.rows[0].last))>BigInt(candidate.id)){
     await c.query("UPDATE moment_auto_jobs SET status='skipped',decision_type='people_continued',decision_reason='사람의 새 메시지가 있어 이전 답변 계획을 취소함',completed_at=now() WHERE id=$1",[jobId]);
     await c.query("COMMIT");return respond({active:true,created:false,reason:"people_continued"});
+   }
+   const memory=typeof value.memorySummary==="string"?value.memorySummary.trim().slice(0,500):"";
+   if(memory.length>=12){
+    await c.query(`INSERT INTO moment_group_memory(chat_id,summary,updated_at)
+      VALUES($1,$2,now()) ON CONFLICT(chat_id) DO UPDATE SET summary=$2,updated_at=now()`,[chatId,memory]);
    }
    let queued=0;
    for(let i=0;i<valid.length;i++){
