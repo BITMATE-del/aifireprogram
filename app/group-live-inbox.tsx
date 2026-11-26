@@ -1,6 +1,6 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
-import {Activity,CheckCircle2,MessageCircle,PauseCircle,PlayCircle,RefreshCw,ShieldCheck,WifiOff} from "lucide-react";
+import {Activity,CheckCircle2,PauseCircle,PlayCircle,RefreshCw,ShieldCheck,WifiOff} from "lucide-react";
 
 type InboxMessage={id:string;chat_id:string;message_id:string;sender_name:string;body:string;observed_at:string};
 type Outgoing={id:string;account_id:string;body:string;status:string;last_error:string|null};
@@ -11,7 +11,6 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
  const [outbox,setOutbox]=useState<Outgoing[]>([]);
  const [workers,setWorkers]=useState<{account_id:string;online:boolean;last_seen:string}[]>([]);
  const [runtime,setRuntime]=useState<Runtime|null>(null);
- const [disclosure,setDisclosure]=useState(false);
  const [loading,setLoading]=useState(false),[working,setWorking]=useState(false);
  const [notice,setNotice]=useState("");
  const valid=/^-?\d+$/.test(groupId);
@@ -34,15 +33,14 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
   }catch(e){if(visual)setNotice(e instanceof Error?e.message:"서버 연결 확인 실패");}
   finally{if(visual)setLoading(false);}
  },[groupId]);
- useEffect(()=>{setDisclosure(false);setNotice("");void refresh(true);const timer=setInterval(()=>{void refresh(false)},8000);return()=>clearInterval(timer)},[refresh]);
+ useEffect(()=>{setNotice("");void refresh(true);const timer=setInterval(()=>{void refresh(false)},8000);return()=>clearInterval(timer)},[refresh]);
  async function change(enabled:boolean){
   if(!valid||working)return;
-  if(enabled&&!disclosure){setNotice("시작하려면 먼저 그룹 안내나 계정 프로필에 AI 운영 사실을 표시하고 아래 항목을 확인하세요.");return;}
   setWorking(true);setNotice("운영 상태를 변경하는 중입니다.");
   try{
    const response=await fetch("/api/auto-conversation",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({chatId:groupId,enabled,disclosureConfirmed:enabled?disclosure:false,intervalSeconds:runtime?.intervalSeconds||60})
+    body:JSON.stringify({chatId:groupId,enabled,intervalSeconds:runtime?.intervalSeconds||60})
    });
    const result=await response.json();
    if(!response.ok)throw Error(result.error||"상태 변경 실패");
@@ -65,11 +63,10 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
     <span className="nxAutoOnline">{online.length? <CheckCircle2 size={14}/>:<WifiOff size={14}/>} 실제 연결 계정 {online.length}개</span>
    </div>
    <p>새로 들어오는 사람의 메시지만 처리하며, AI 계정끼리 주고받는 자동 대화는 생성하지 않습니다. 답글(인용)이 아닌 일반 메시지로 전송합니다.</p>
-   {!runtime?.enabled&&<label className="nxAutoDisclosure"><input type="checkbox" checked={disclosure} onChange={e=>setDisclosure(e.target.checked)}/><span>그룹 안내 또는 계정 프로필에 AI 자동 참여 사실을 표시했습니다.</span></label>}
    <div className="nxAutoControls">
     {runtime?.enabled?
      <button className="nxAutoStop" disabled={working} onClick={()=>void change(false)}><PauseCircle size={18}/> {working?"처리 중":"작동 정지"}</button>:
-     <button className="nxAutoStart" disabled={!valid||working||!disclosure} onClick={()=>void change(true)}><PlayCircle size={18}/> {working?"처리 중":"작동 시작"}</button>
+     <button className="nxAutoStart" disabled={!valid||working} onClick={()=>void change(true)}><PlayCircle size={18}/> {working?"처리 중":"작동 시작"}</button>
     }
     <span>최소 반응 간격 {runtime?.intervalSeconds??60}초 · 시작 이전 메시지 소급 발송 없음</span>
    </div>
@@ -87,6 +84,6 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
     </div>):<p className="nxEmpty">아직 전송 기록이 없습니다. 작동 시작 후 새 그룹 메시지에 반응하면 이곳에 표시됩니다.</p>}
    </div>
   </div>
-  <div className="nxAutoHelp"><ShieldCheck size={16}/><span>AI 계정임을 그룹에 명확히 안내한 뒤 이용하세요. 실제 시세나 수익을 꾸며내지 않고, AI 반응은 사람의 발언에 기반해 생성됩니다. 반복 발송·중복 응답·예산 초과를 제한합니다.</span></div>
+  <div className="nxAutoHelp"><ShieldCheck size={16}/><span>AI 자동 참여 계정은 그룹 소개나 계정 프로필에서 식별할 수 있도록 운영합니다. 중복 전송 및 API 예산 제한은 계속 적용됩니다.</span></div>
  </section>;
 }
