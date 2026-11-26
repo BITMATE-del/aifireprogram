@@ -56,7 +56,7 @@ const groupPeople=useMemo(()=>groupAssignments.filter(a=>a.mode!=="observer").fl
 const history=messages.filter(x=>x.groupId===groupId);
 const assigned=assignments.find(a=>a.accountId===accountId&&a.groupId===groupId);
 function go(p:Page){setPage(p);setNotice("");}
-function addAccount(){const name=accountName.trim();if(!name)return;if(accounts.some(a=>a.id===name)){setNotice("같은 이름의 테스트 계정이 이미 있습니다.");return;}setAccounts(old=>[...old,{id:name,name,note:"로컬 테스트 계정",enabled:true}]);setAccountId(name);setAccountName("");setNotice("테스트 계정을 등록했습니다. 실제 텔레그램 계정과 연결되지는 않습니다.");}
+function addAccount(){const name=accountName.trim();if(!name)return;if(name==="__global_defaults__"||name==="__server_default__"){setNotice("시스템 예약 이름은 계정 이름으로 사용할 수 없습니다.");return;}if(accounts.some(a=>a.id===name)){setNotice("같은 이름의 테스트 계정이 이미 있습니다.");return;}setAccounts(old=>[...old,{id:name,name,note:"로컬 테스트 계정",enabled:true}]);setAccountId(name);setAccountName("");setNotice("테스트 계정을 등록했습니다. 실제 텔레그램 계정과 연결되지는 않습니다.");}
 function addGroup(){const name=groupName.trim(),id=groupCode.trim()||"local-"+nid();if(!name)return;if(groups.some(x=>x.id===id)){setNotice("이미 존재하는 그룹 ID입니다.");return;}setGroups(old=>[...old,{id,name}]);setGroupId(id);setGroupName("");setGroupCode("");setNotice("테스트 그룹을 추가했습니다.");}
 function apply(){if(!accountId||!groupId||!personaId){setNotice("계정, 그룹, 페르소나를 모두 선택하세요.");return;}setAssignments(old=>[...old.filter(a=>!(a.accountId===accountId&&a.groupId===groupId)),{accountId,groupId,personaId,mode}]);setNotice("적용 완료: "+accountId+" → "+groups.find(x=>x.id===groupId)?.name+" → "+personas.find(x=>x.id===personaId)?.name);}
 async function simulate(){if(busy||groupPeople.length<1)return;setBusy(true);setNotice("대화를 생성하는 중입니다.");try{
