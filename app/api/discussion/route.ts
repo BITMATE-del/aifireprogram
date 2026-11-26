@@ -8,17 +8,6 @@ type Persona={id:string;name:string;role:string;style:string;risk:number;account
 type Turn={speakerId:string;speaker:string;text:string};
 function str(v:unknown,max=500){return typeof v==="string"?v.trim().slice(0,max):""}
 function personasOf(v:unknown):Persona[]{if(!Array.isArray(v))return [];return v.slice(0,20).filter(p=>p&&typeof p==="object"&&typeof p.id==="string"&&typeof p.name==="string").map(p=>({id:str(p.id,200),name:str(p.name,60),role:str(p.role,120),style:str(p.style,1200),risk:typeof p.risk==="number"?Math.max(0,Math.min(100,p.risk)):50,accountId:str(p.accountId,120),participationRole:p.participationRole==="expert"?"expert":p.participationRole==="observer"?"observer":"member",frequency:p.frequency==="quiet"?"quiet":p.frequency==="active"?"active":"balanced",responseMode:p.responseMode==="reactive"?"reactive":p.responseMode==="independent"?"independent":"balanced",interests:str(p.interests,250)}));}
-function sample(topic:string,people:Persona[],human:string):Turn[]{
- const order=[...people].filter(p=>p.participationRole!=="observer").sort((a,b)=>Number(a.participationRole==="expert")-Number(b.participationRole==="expert"));
- const entries=order.slice(0,Math.min(4,order.length));
- const lines=[
- human?"그 말씀을 듣고 보니 기준을 어느 지점에서 바꾸실지가 궁금하네요.":"그 주제라면 먼저 어떤 근거로 판단하는지 듣고 싶습니다.",
- "저는 단순히 방향보다 그 판단이 틀렸을 때 어떻게 대응할지가 더 중요하다고 생각합니다.",
- "두 분이 보는 기준이 다르네요. 거래량과 실적 중 어떤 쪽이 지금 더 중요한지 확인해볼 필요가 있겠습니다.",
- "결국 지금 단정하기보다는 다음 데이터를 확인한 뒤 다시 비교해보는 게 낫겠네요."
- ];
- return entries.map((p,i)=>({speakerId:p.id,speaker:p.name,text:(i===0&&!human?"‘"+topic.slice(0,85)+"’에 대해 한 가지 궁금한 게 있습니다. ":"")+lines[i]}));
-}
 export async function POST(req:NextRequest){
  try{
   const contentLength=Number(req.headers.get("content-length")||0);
