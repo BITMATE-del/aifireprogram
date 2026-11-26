@@ -1,6 +1,7 @@
 import {NextRequest,NextResponse} from "next/server";
 import {effectiveAccountSecret} from "../../../lib/credential-vault";
 import {recordUsage} from "../../../lib/ai-usage";
+import {allowedChats,bridgeDatabase} from "../../../lib/group-bridge";
 export const runtime="nodejs";
 type Persona={id:string;name:string;role:string;style:string;risk:number;accountId:string;participationRole:"member"|"expert"|"observer"};
 type Turn={speakerId:string;speaker:string;text:string};
@@ -24,7 +25,17 @@ export async function POST(req:NextRequest){
   const input=await req.json();
   if(JSON.stringify(input).length>30000)return NextResponse.json({error:"요청 용량이 너무 큽니다."},{status:413});
   const topic=str(input?.topic,1200),human=str(input?.humanMessage,1200),people=personasOf(input?.personas);
-  const history=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
+  let history=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
+  const groupId=str(input?.groupId,120);
+  if(allowedChats().has(groupId)){
+   try{
+    const db=await bridgeDatabase();
+    const recent=await db.query(`SELECT sender_name AS speaker,body AS text FROM
+       (SELECT sender_name,body,id FROM moment_group_inbox WHERE chat_id=$1 ORDER BY id DESC LIMIT 30) recent
+       ORDER BY id ASC`,[groupId]);
+    if(recent.rowCount)history=recent.rows.map((r:{speaker:string;text:string})=>({speaker:str(r.speaker,60),text:str(r.text,600)}));
+   }catch{ /* keep manual test available if the real inbox is not ready */ }
+  }
   if(!topic||people.length<1)return NextResponse.json({error:"토론 주제와 발언 가능한 AI 페르소나 1명 이상이 필요합니다."},{status:400});
   const preferred=str(input?.credentialAccountId,120);
   const allowedAccounts=new Set(people.map(p=>p.accountId).filter(Boolean));
@@ -51,7 +62,8 @@ export async function POST(req:NextRequest){
     "실제 데이터가 제공되지 않았으므로 최신 시세나 거래 성과를 만들어 내지 마세요.",
     "AI가 실제 거래를 했거나 수익을 얻었다고 허위 주장하지 않으며, 모의투자일 때는 명시하세요.",
     "대화는 교육용 시뮬레이션이며 실제 참여자가 쓴 것처럼 사칭하지 마세요.",
-    "필요하면 0~5개 자연스러운 한국어 메시지를 만드세요. 불필요한 맞장구를 만들지 마세요.",
+    "필요하면 0~3개 자연스러운 한국어 메시지를 만드세요. 불필요한 맞장구를 만들지 마세요.",
+    "한 번 반응한 참여자는 그 주제에 연속 답변을 하지 않도록 하고, 질문형·관망형 회원의 말수 차이를 유지하세요.",
     '반드시 JSON 객체 {"turns":[{"speakerId":"페르소나 id","text":"발언"}]} 형식으로만 응답하세요.'
   ].join("\n");
   const response=await fetch("https://api.openai.com/v1/chat/completions",{
@@ -87,11 +99,12 @@ export async function POST(req:NextRequest){
   let parsed:{turns?:{speakerId?:unknown;text?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
   const lookup=new Map(people.filter(p=>p.participationRole!=="observer").map(p=>[p.id,p.name]));
-  const seen=new Set<string>();
-  const turns:Turn[]=(Array.isArray(parsed.turns)?parsed.turns:[]).slice(0,5).flatMap(t=>{
+  const normalize=(v:string)=>v.toLowerCase().replace(/[\\s\\p{P}\\p{S}]/gu,"");
+  const seen=new Set(history.slice(-10).map(x=>normalize(x.text)));
+  const turns:Turn[]=(Array.isArray(parsed.turns)?parsed.turns:[]).slice(0,3).flatMap(t=>{
     const speakerId=str(t.speakerId,80),text=str(t.text,700);
-    if(!lookup.has(speakerId)||!text||seen.has(text))return [];
-    seen.add(text);return [{speakerId,speaker:lookup.get(speakerId)!,text}];
+    if(!lookup.has(speakerId)||!text||seen.has(normalize(text)))return [];
+    seen.add(normalize(text));return [{speakerId,speaker:lookup.get(speakerId)!,text}];
   });
   if(turns.length===0)return NextResponse.json({mode:"ai",turns:[],notice:"현재 주제에는 꼭 필요한 추가 발언이 없어 대화를 생성하지 않았습니다."},{headers:{"Cache-Control":"no-store"}});
   return NextResponse.json({mode:"ai",turns,notice:"AI가 생성한 비공개 토론 시뮬레이션입니다. 실제 시세 검증은 수행되지 않았습니다."},{headers:{"Cache-Control":"no-store"}});
