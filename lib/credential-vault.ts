@@ -7,13 +7,13 @@ function encryptionKey():Buffer{
  if(!secret||secret.length<32)throw new Error("CREDENTIAL_ENCRYPTION_KEY_MISSING_OR_SHORT");
  return Buffer.from(hkdfSync("sha256",Buffer.from(secret),Buffer.from("moment-studio-credential-storage"),Buffer.from(context),32));
 }
-function encrypt(plain:string):string{
+export function encryptTransientSecret(plain:string):string{
  const iv=randomBytes(12);
  const cipher=createCipheriv("aes-256-gcm",encryptionKey(),iv);
  const encrypted=Buffer.concat([cipher.update(plain,"utf8"),cipher.final()]);
  return ["v1",iv.toString("base64url"),cipher.getAuthTag().toString("base64url"),encrypted.toString("base64url")].join(".");
 }
-function decrypt(value:string):string{
+export function decryptTransientSecret(value:string):string{
  const [v,iv,tag,blob]=value.split(".");
  if(v!=="v1"||!iv||!tag||!blob)throw new Error("INVALID_ENCRYPTED_SECRET");
  const decipher=createDecipheriv("aes-256-gcm",encryptionKey(),Buffer.from(iv,"base64url"));
@@ -48,7 +48,7 @@ export type SecretName=keyof typeof secretFields;
 export async function saveCredential(accountId:string,field:SecretName,value:string|null){
  const db=await credentialDatabase();
  const column=secretFields[field];
- const encrypted=value===null?null:encrypt(value);
+ const encrypted=value===null?null:encryptTransientSecret(value);
  await db.query(`INSERT INTO moment_account_credentials(account_id,${column},updated_at)
  VALUES($1,$2,now()) ON CONFLICT (account_id) DO UPDATE
  SET ${column}=EXCLUDED.${column},updated_at=now()`,[accountId,encrypted]);
@@ -56,7 +56,7 @@ export async function saveCredential(accountId:string,field:SecretName,value:str
 export async function accountSecret(accountId:string,field:SecretName):Promise<string|null>{
  const db=await credentialDatabase();
  const res=await db.query(`SELECT ${secretFields[field]} AS value FROM moment_account_credentials WHERE account_id=$1`,[accountId]);
- return res.rows[0]?.value?decrypt(res.rows[0].value):null;
+ return res.rows[0]?.value?decryptTransientSecret(res.rows[0].value):null;
 }
 export const DEFAULT_ACCOUNT_ID="__global_defaults__";
 export const INHERITABLE_FIELDS=["telegramApiId","telegramApiHash","openaiApiKey"] as const;
@@ -84,7 +84,7 @@ export async function allCredentialRecords():Promise<{
    ]);
    if(id.value&&hash.value)rows.push({
     accountId:row.account_id,telegramApiId:id.value,telegramApiHash:hash.value,
-    telegramSession:decrypt(row.session)
+    telegramSession:decryptTransientSecret(row.session)
    });
   }catch{}
  }
