@@ -15,6 +15,7 @@ from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError, RPCError
 from login_flow import poll as poll_logins
 from session_file_import import poll as poll_session_files
+from account_management import poll_account as poll_account_actions
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
 log=logging.getLogger("moment.bridge")
@@ -183,6 +184,10 @@ async def run():
                     next_refresh=now+REFRESH_SECONDS
                     if not connections:
                         log.info("No active Telegram account yet. Configure credentials in the admin site.")
+                # Account-level commands do not require a group assignment.
+                # A session-only account can join its first group here.
+                for connection in list(connections.values()):
+                    await poll_account_actions(session,BASE,HEADERS,connection)
                 # One coordinator per group, but every connected account can send
                 # its own already-approved outbox messages. Bounded concurrency
                 # keeps 10-50 accounts responsive without hammering the server.
