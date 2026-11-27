@@ -5,7 +5,7 @@ import {Activity,CheckCircle2,PauseCircle,PlayCircle,RefreshCw,ShieldCheck,WifiO
 type InboxMessage={id:string;chat_id:string;message_id:string;sender_name:string;body:string;observed_at:string};
 type Outgoing={id:string;account_id:string;body:string;status:string;last_error:string|null};
 type DirectorDecision={type:string|null;reason:string|null;accounts:string[]|null;status:string;completed_at:string|null;claimed_at:string};
-type Runtime={chatId:string;enabled:boolean;disclosureConfirmed:boolean;intervalSeconds:number;lastError:string|null;lastGeneratedAt:string|null;decisions?:DirectorDecision[]};
+type Runtime={chatId:string;enabled:boolean;disclosureConfirmed:boolean;intervalSeconds:number;lastError:string|null;lastGeneratedAt:string|null;decisions?:DirectorDecision[];session?:{status:string;turn_count:number;updated_at:string}|null};
 const stateLabel=(s:string)=>s==="pending"?"발송 대기":s==="sending"?"발송 중":s==="sent"?"전송 완료":s==="failed"?"전송 확인 필요":s==="cancelled"?"취소됨":s;
 export default function GroupLiveInbox({groupId}:{groupId:string}){
  const [messages,setMessages]=useState<InboxMessage[]>([]);
@@ -63,7 +63,8 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
     </div>
     <span className="nxAutoOnline">{online.length? <CheckCircle2 size={14}/>:<WifiOff size={14}/>} 실제 연결 계정 {online.length}개</span>
    </div>
-   <p>새로 들어오는 사람의 메시지만 처리하며, AI 계정끼리 주고받는 자동 대화는 생성하지 않습니다. 답글(인용)이 아닌 일반 메시지로 전송합니다.</p>
+   <p>실제 회원의 대화를 우선합니다. 필요할 때 AI 계정끼리도 이전 발언에 반응하며, 발언 후 다음 참여 여부를 다시 판단합니다. 메시지는 일반 채팅으로 전송합니다.</p>
+   {runtime?.session&&<p className="nxAutoSession"><strong>현재 대화:</strong> {runtime.session.status==="deciding"?"대화 판단 중":runtime.session.status==="waiting"?"발언 확인 및 다음 흐름 관찰":"대화 관찰 중"} · 발언 {runtime.session.turn_count}/3</p>}
    <div className="nxAutoControls">
     {runtime?.enabled?
      <button className="nxAutoStop" disabled={working} onClick={()=>void change(false)}><PauseCircle size={18}/> {working?"처리 중":"작동 정지"}</button>:
@@ -77,7 +78,7 @@ export default function GroupLiveInbox({groupId}:{groupId:string}){
   <div className="nxDirectorLog">
    <div className="nxPanelHeading"><div><h3>대화 디렉터 판단 기록</h3><p>무반응도 정상 결과입니다. 최근에 어떤 이유로 말하거나 관망했는지 확인할 수 있습니다.</p></div></div>
    {(runtime?.decisions||[]).length?(runtime?.decisions||[]).slice(0,6).map((d,i)=><div className="nxDirectorDecision" key={i}>
-    <strong>{d.type==="reply"?"대화 참여":d.type==="silent"?"관망":d.type==="people_continued"?"사람 대화 우선":d.type==="error"?"처리 오류":d.status==="processing"?"대화 판단 중":"반응 생략"}</strong>
+    <strong>{["SPEAK","EXCHANGE"].includes(d.type||"")?"대화 참여":d.type==="END"?"대화 종료":d.type==="CANCEL"?"대화 취소":d.type==="reply"?"대화 참여":d.type==="silent"?"관망":d.type==="people_continued"?"사람 대화 우선":d.type==="error"?"처리 오류":d.status==="processing"?"대화 판단 중":"반응 생략"}</strong>
     <span>{d.reason||(d.status==="processing"?"":d.status)}</span>
     <small>{d.accounts?.length?d.accounts.join(", ")+" · ":""}{new Date(d.completed_at||d.claimed_at).toLocaleString("ko-KR")}</small>
    </div>):<p className="nxTip">아직 대화 판단 기록이 없습니다. 새 그룹 메시지가 들어오면 이곳에 표시됩니다.</p>}
