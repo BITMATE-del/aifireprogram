@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {isAllowedGroup,authorizedBridge,bridgeDatabase,flagUnconfirmedSends,safeAccountId,safeChatId} from "../../../lib/group-bridge";
+import {isAllowedGroup,authorizedBridge,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 import {autoDb} from "../../../lib/auto-conversation";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -84,12 +84,14 @@ export async function GET(req:NextRequest){
        )`,[verify,accountId,chatId]);
    return reply({canSend:Boolean(allowed.rowCount)});
   }
-  // An unacknowledged Telegram send may have succeeded: mark it for review,
-  // never auto-retry it, and release the per-account send lane.
-  await flagUnconfirmedSends();
   const db=await autoDb(),client=await db.connect();
   try{
    await client.query("BEGIN");
+   // Recover only this account's stale claims. Telegram may have delivered
+   // them already, so never put these messages back into the pending queue.
+   await client.query(`UPDATE moment_group_outbox SET status='failed',
+     last_error='전송 결과 확인 불가: 실제 Telegram 메시지 확인 필요',completed_at=now()
+     WHERE account_id=$1 AND status='sending' AND claimed_at<now()-interval '3 minutes'`,[accountId]);
    // A person's newer message supersedes any delayed AI-to-AI follow-up.
    // When Start/Stop was turned off, old queued auto messages must not leak.
    await client.query(`UPDATE moment_group_outbox o SET status='cancelled',completed_at=now(),
