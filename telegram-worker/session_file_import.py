@@ -58,7 +58,12 @@ async def poll(session,base:str,headers:dict)->bool:
     try:
         async with session.post(base+"/api/bridge/session-file",headers=headers,json=payload) as response:
             if response.status!=200:
-                log.warning("Session file result not accepted: HTTP %s",response.status)
+                # Server error text contains only a short status label, never session secrets.
+                try:
+                    explanation=(await response.json()).get("error","서버 응답 오류")
+                except Exception:
+                    explanation="서버 응답 오류"
+                log.warning("Session file result rejected: HTTP %s (%s)",response.status,str(explanation)[:100])
                 return False
     except Exception as exc:
         log.warning("Session file result transport failed: %s",type(exc).__name__)
