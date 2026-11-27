@@ -45,8 +45,11 @@ async def perform(client, action):
             code=segment[1:] if segment.startswith("+") else segment[len("joinchat/"):]
             if not code or len(code)>120:
                 raise ValueError("INVALID_INVITE")
-            await client(ImportChatInviteRequest(hash=code))
-            entity=await client.get_entity(url)
+            imported=await client(ImportChatInviteRequest(hash=code))
+            joined=list(getattr(imported,"chats",[]) or [])
+            if not joined:
+                raise ValueError("GROUP_JOIN_RESULT_UNAVAILABLE")
+            entity=joined[0]
         else:
             username=segment.lstrip("@")
             if not (4<=len(username)<=32 and username.replace("_","").isalnum()):
