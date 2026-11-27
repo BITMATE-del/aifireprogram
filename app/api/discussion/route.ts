@@ -17,6 +17,8 @@ export async function POST(req:NextRequest){
   const topic=str(input?.topic,1200),human=str(input?.humanMessage,1200),people=personasOf(input?.personas);
   let history:{speaker:string;text:string}[]=Array.isArray(input?.history)?input.history.slice(-16).map((v:unknown)=>{const x=v as {speaker?:unknown;text?:unknown};return {speaker:str(x?.speaker,60),text:str(x?.text,600)}}):[];
   const directorMode=input?.director===true;
+  const followUp=directorMode&&input?.followUp===true;
+  const conversationStep=Math.min(3,Math.max(1,Number(input?.conversationStep)||1));
   const groupId=str(input?.groupId,120);
   const inboxMessageId=str(input?.inboxMessageId,40);
   const isDirectQuestion=Boolean(human)&&(/[?？]/.test(human)||/(까요|나요|습니까|어떻게|왜|의견|궁금|알려|어떤가요|괜찮을까요)/.test(human));
@@ -26,7 +28,8 @@ export async function POST(req:NextRequest){
     // Interleave real member messages and previously sent AI messages in Telegram
     // order so the next response can continue the actual group conversation.
     const recent=await db.query(`WITH current_msg AS (
-      SELECT message_id FROM moment_group_inbox WHERE chat_id=$1 AND id=$2::bigint
+      SELECT CASE WHEN $3::boolean THEN 9223372036854775807::bigint ELSE message_id END AS message_id
+       FROM moment_group_inbox WHERE chat_id=$1 AND id=$2::bigint
      ), dialog AS (
       SELECT sender_name AS speaker,body AS text,message_id AS tid
        FROM moment_group_inbox WHERE chat_id=$1 AND message_id<
@@ -37,7 +40,7 @@ export async function POST(req:NextRequest){
        AND sent_message_id IS NOT NULL AND sent_message_id<
        COALESCE((SELECT message_id FROM current_msg),9223372036854775807)
      ) SELECT speaker,text FROM (SELECT speaker,text,tid FROM dialog ORDER BY tid DESC LIMIT 20) x ORDER BY tid ASC`,
-      [groupId,/^\d+$/.test(inboxMessageId)?inboxMessageId:"0"]);
+      [groupId,/^\d+$/.test(inboxMessageId)?inboxMessageId:"0",followUp]);
     if(recent.rowCount)history=recent.rows.map((r:{speaker:string;text:string})=>({speaker:str(r.speaker,60),text:str(r.text,600)}));
    }catch{ /* keep manual test available if the real inbox is not ready */ }
   }
@@ -71,7 +74,10 @@ export async function POST(req:NextRequest){
   const directorInstructions=directorMode?[
     "모든 메시지에 반응할 필요는 없습니다. 전체 문맥을 먼저 읽고 정말 도움이 될 때만 decision=reply로 판단합니다.",
     "인사, 짧은 감탄, 이미 답이 나온 질문, 사람이 서로 대화 중인 경우는 decision=silent를 우선합니다.",
-    "상황에 맞는 한 명만 우선 선택하고, 서로 다른 근거가 유용한 경우에만 2명까지 허용합니다. 같은 계정의 연속 발언을 피합니다.",
+    "상황에 맞는 한 명만 우선 선택합니다. 서버가 실제 발송 후 별도의 판단 호출을 하므로 한 번에 1개의 발언만 반환하세요.",
+    "followUp=true라면 lastAiTurn에 대한 직접 반응이 정말 필요한지 재판단하세요. 기존 사람 질문에 처음부터 반복 대답하지 마세요.",
+    "후속 턴은 이전 계정과 다른 계정만 후보로 전달됩니다. 구체적인 새 관점이 없다면 silent로 종료합니다.",
+    "현재 AI끼리 이어지는 발언이 과도해질 경우 조용히 끝냅니다. 한 세션의 최대 발언은 3개입니다.",
     "응답의 목적은 정보를 보태거나 질문을 명확히 하는 것입니다. 대화를 억지로 지속하거나 질문으로 끝내려 하지 않습니다.",
     "인간의 대화 주도권을 우선합니다. 문장은 어색한 요약·교과서식 안내·상투적 맞장구를 피하고, 각 페르소나 말투와 길이를 구별합니다.",
     "frequency=quiet인 계정은 매우 드물게, active는 관련 주제에 조금 더 적극적으로, balanced는 중간 정도로 참여합니다. 어떤 성격도 반드시 말해야 하는 것은 아닙니다.",
@@ -79,8 +85,10 @@ export async function POST(req:NextRequest){
     "문장에 인위적 오타를 넣거나 사람이 실제로 한 거래·경험을 AI가 한 것처럼 쓰지 않습니다.",
     "groupMemory와 accountPriorMessages는 실제 대화에서 얻은 참고 정보입니다. 최신 발언이 우선하며 이전 판단의 일관성을 유지하되 오래된 전망을 사실처럼 취급하지 않습니다.",
     "memorySummary는 최근 실제 대화의 주제와 이미 제시된 입장만 400자 이내로 갱신합니다. 확인하지 않은 사실·투자 성과를 만들지 않습니다.",
-    "명시적으로 말할 필요가 없다면 decision=\"silent\", turns=[]를 반환합니다. 필요할 때 decision=\"reply\"를 반환합니다.",
-    '출력 JSON: {"decision":"silent|reply","reason":"운영자가 볼 짧은 한국어 근거","memorySummary":"실제 대화의 핵심 맥락 400자 이내","turns":[{"speakerId":"P1","text":"발언"}]}'
+    "발언할 필요가 없다면 decision=\"silent\", turns=[]를 반환합니다. 필요한 경우에만 decision=\"reply\"를 반환합니다.",
+    "각 발언은 intent=INFORM|QUESTION|CLARIFY|AGREE_WITH_REASON|DISAGREE_WITH_REASON|ANSWER|ACKNOWLEDGE 중 하나를 가져야 합니다.",
+    '출력 JSON: {"decision":"silent|reply","reason":"운영자가 볼 짧은 한국어 근거","memorySummary":"최근 대화의 맥락 400자 이내","turns":[{"speakerId":"P1","intent":"ANSWER","text":"발언"}]}'
+
   ]:[];
   const description=[
     "당신은 실제 텔레그램 투자 커뮤니티에 참여하는 AI 계정들의 대화 디렉터입니다.",
@@ -105,7 +113,7 @@ export async function POST(req:NextRequest){
       response_format:{type:"json_object"},
       temperature:0.7,
       max_tokens:1200,
-      messages:[{role:"system",content:description},{role:"user",content:JSON.stringify({topic,humanMessage:human,isDirectQuestion,personas:roster,history,directorMode,
+      messages:[{role:"system",content:description},{role:"user",content:JSON.stringify({topic,humanMessage:human,isDirectQuestion,personas:roster,history,directorMode,followUp,conversationStep,lastAiTurn:followUp?input?.lastAiTurn:null,
         groupMemory:str(input?.groupMemory,600),
         accountPriorMessages:Array.isArray(input?.accountPriorMessages)?input.accountPriorMessages.slice(0,16):[],
         marketData:"실시간 시세 미연동"})}]
@@ -130,7 +138,7 @@ export async function POST(req:NextRequest){
    }catch(error){console.error("AI usage ledger write failed",error instanceof Error?error.name:"unknown");}
   }
 
-  let parsed:{decision?:unknown;reason?:unknown;memorySummary?:unknown;turns?:{speakerId?:unknown;text?:unknown}[]};
+  let parsed:{decision?:unknown;reason?:unknown;memorySummary?:unknown;turns?:{speakerId?:unknown;text?:unknown;intent?:unknown}[]};
   try{parsed=JSON.parse(result?.choices?.[0]?.message?.content||"{}")}catch{return NextResponse.json({error:"AI 응답 형식을 해석할 수 없습니다."},{status:502});}
   const normalize=(v:string)=>v.toLowerCase().replace(/[\s\p{P}\p{S}]/gu,"");
   const seen=new Set(history.slice(-20).map(x=>normalize(x.text)));
@@ -165,9 +173,9 @@ export async function POST(req:NextRequest){
   };
   let rejectedSpeaker=0,rejectedRepeat=0,rejectedEmpty=0;
   const rawTurns=directorMode&&parsed.decision==="silent"?[]:Array.isArray(parsed.turns)?parsed.turns:[];
-  const turns:Turn[]=rawTurns.slice(0,directorMode?2:3).flatMap(t=>{
+  const turns:(Turn&{intent?:string})[]=rawTurns.slice(0,directorMode?1:3).flatMap(t=>{
     if(!t||typeof t!=="object"){rejectedEmpty++;return [];}
-    const reply=t as {speakerId?:unknown;speaker?:unknown;name?:unknown;text?:unknown;message?:unknown;content?:unknown};
+    const reply=t as {speakerId?:unknown;speaker?:unknown;name?:unknown;text?:unknown;message?:unknown;content?:unknown;intent?:unknown};
     const matching=decodeSpeaker(reply.speakerId??reply.speaker??reply.name);
     if(!matching){rejectedSpeaker++;return [];}
     const message=str(reply.text??reply.message??reply.content,700);
@@ -180,7 +188,9 @@ export async function POST(req:NextRequest){
      rejectedRepeat++;return [];
     }
     seen.add(normalize(message));
-    return [{speakerId:matching.id,speaker:matching.name,text:message}];
+    const intent=str(reply.intent,40);
+    const safeIntent=["INFORM","QUESTION","CLARIFY","AGREE_WITH_REASON","DISAGREE_WITH_REASON","ANSWER","ACKNOWLEDGE"].includes(intent)?intent:"ANSWER";
+    return [{speakerId:matching.id,speaker:matching.name,text:message,intent:safeIntent}];
   });
   if(!turns.length){
     const reason=directorMode&&parsed.decision==="silent"?"DIRECTOR_SILENT":rawTurns.length===0?"MODEL_NO_TURNS":rejectedSpeaker?"UNKNOWN_SPEAKER":rejectedRepeat?"DUPLICATE_TURNS":"EMPTY_TURNS";
