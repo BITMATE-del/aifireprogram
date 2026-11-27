@@ -10,7 +10,7 @@ const validAccount=(x:unknown)=>typeof x==="string"&&x.trim().length>0&&x.length
 const sqliteSignature=Buffer.from("SQLite format 3\0","binary");
 function stringSession(source:Buffer):string|null{
  const value=new TextDecoder("utf-8",{fatal:true}).decode(source).replace(/^\uFEFF/,"").trim();
- return /^1[A-Za-z0-9_-]{80,7999}$/.test(value)?value:null;
+ return /^1[A-Za-z0-9_-]{80,7999}={0,2}$/.test(value)?value:null;
 }
 export async function GET(req:NextRequest){
  const accountId=req.nextUrl.searchParams.get("accountId");
