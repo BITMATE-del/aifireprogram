@@ -52,7 +52,7 @@ export async function POST(req:NextRequest){
   await db.query(`INSERT INTO moment_session_file_imports(account_id,request_id,phase,file_cipher,message,created_at,updated_at,expires_at)
    VALUES($1,$2,'pending',$3,'세션 파일을 연결 워커에서 확인하는 중입니다.',now(),now(),now()+interval '15 minutes')
    ON CONFLICT(account_id) DO UPDATE SET request_id=$2,phase='pending',file_cipher=$3,message='세션 파일을 연결 워커에서 확인하는 중입니다.',
-   created_at=now(),updated_at=now(),expires_at=now()+interval '15 minutes'`,
+   created_at=now(),updated_at=now(),expires_at=now()+interval '15 minutes',attempts=0`,
   [accountId,requestId,encryptTransientSecret(bytes.toString("base64"))]);
   return json({ok:true,phase:"pending",message:"세션 파일을 등록했습니다. 워커에서 변환한 후 자동 연결됩니다."});
  }catch{return json({error:"세션 파일을 저장하지 못했습니다. 서버 저장소를 확인하세요."},503)}
