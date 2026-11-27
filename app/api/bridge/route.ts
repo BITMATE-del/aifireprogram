@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {isAllowedGroup,authorizedBridge,bridgeDatabase,safeAccountId,safeChatId} from "../../../lib/group-bridge";
+import {isAllowedGroup,authorizedBridge,bridgeDatabase,flagUnconfirmedSends,safeAccountId,safeChatId} from "../../../lib/group-bridge";
 import {autoDb} from "../../../lib/auto-conversation";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -84,6 +84,9 @@ export async function GET(req:NextRequest){
        )`,[verify,accountId,chatId]);
    return reply({canSend:Boolean(allowed.rowCount)});
   }
+  // An unacknowledged Telegram send may have succeeded: mark it for review,
+  // never auto-retry it, and release the per-account send lane.
+  await flagUnconfirmedSends();
   const db=await autoDb(),client=await db.connect();
   try{
    await client.query("BEGIN");
