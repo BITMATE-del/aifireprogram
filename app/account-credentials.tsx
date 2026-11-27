@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from "react";
 import {Check,Eye,EyeOff,KeyRound,Lock,Save,Trash2,Upload,WifiOff} from "lucide-react";
 import TelegramPhoneLogin from "./telegram-phone-login";
 import AccountConnectionStatus from "./account-connection-status";
+import AccountTelegramControls from "./account-telegram-controls";
 type Field="telegramApiId"|"telegramApiHash"|"telegramSession"|"openaiApiKey";
 type Status={telegramApiId:boolean;telegramApiHash:boolean;telegramSession:boolean;openaiApiKey:boolean;updatedAt:string|null};
 type Source="custom"|"default"|"none";
@@ -141,6 +142,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
     </div>)}</div>
    <div className="nxCredentialTest"><button disabled={testing||loading||sources.openaiApiKey==="none"} onClick={testOpenAi}><Check size={15}/>{testing?"키 확인 중":"저장된 OpenAI API 연결 확인"}</button><span>API 키 유효성만 확인하며 토큰 생성 비용이 발생하지 않는 조회입니다.</span></div>
    <AccountConnectionStatus accountId={accountId}/>
+   <AccountTelegramControls accountId={accountId}/>
    <div className="nxCredentialHelp"><WifiOff size={16}/><span>Telegram API ID·HASH는 전체 기본값을 사용할 수 있습니다. 전화번호 인증으로 계정별 로그인 세션을 자동 생성하거나, 기존 StringSession을 직접 입력하거나 .session/.txt 파일로 등록할 수 있습니다. 등록 후 연결은 별도 워커가 수행합니다. API 키와 세션은 브라우저 저장소나 백업 파일에 포함되지 않습니다.</span></div>
    {notice&&<div className="nxCredentialNotice" role="status"><Check size={15}/>{notice}</div>}
  </section>;
