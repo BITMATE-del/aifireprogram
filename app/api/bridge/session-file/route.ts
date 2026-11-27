@@ -47,7 +47,7 @@ export async function POST(req:NextRequest){
     (phase!=="connected"&&phase!=="error"))return json({error:"작업 정보 오류"},400);
  const success=phase==="connected";
  const session=typeof payload.session==="string"?payload.session:"";
- if(success&&!/^1[A-Za-z0-9_-]{80,7999}$/.test(session)){
+ if(success&&!/^1[A-Za-z0-9_-]{80,7999}={0,2}$/.test(session)){
   payload={...payload,phase:"error",message:"세션 변환 결과가 유효한 StringSession 형식이 아닙니다."};
  }
  const finalSuccess=payload.phase==="connected";
