@@ -38,6 +38,13 @@ export default function AccountCredentials({accountId}:{accountId:string}){
    .then(data=>{if(alive){setStatus(data.status);setSources(data.sources||none)}})
    .catch(e=>{if(alive)setNotice(e instanceof Error?e.message:"상태 확인 실패")})
    .finally(()=>{if(alive)setLoading(false)});
+  fetch("/api/session-file?accountId="+encodeURIComponent(accountId),{cache:"no-store"})
+   .then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error||"업로드 이력 확인 실패");return data})
+   .then(data=>{if(!alive)return;
+    if(data.phase==="pending"||data.phase==="processing"){setImportPending(true);setImportMessage(data.message||"세션 파일 변환 중");setFileNotice("세션 파일 처리 중");}
+    else if(data.phase==="error"){setFileNotice("이전 등록 실패: "+(data.message||"파일 확인 오류"));}
+    else if(data.phase==="connected"){setFileNotice("이전 세션 파일 등록 완료");}
+   }).catch(()=>{});
   return()=>{alive=false};
  },[accountId]);
  async function mutate(field:Field,value:string|null){
