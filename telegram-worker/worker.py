@@ -192,7 +192,7 @@ async def run():
                 async def process_group(connection,chat_id):
                     async with semaphore:
                         await bridge_json(session,"POST","/api/bridge",json={
-                            "type":"heartbeat","accountId":connection.account_id,"chatId":str(chat_id)
+                            "type":"heartbeat","accountId":connection.account_id,"chatId":str(chat_id),"userId":str(connection.user_id)
                         })
                         if coordinator.get(chat_id)==connection.account_id:
                             await bridge_json(session,"GET","/api/bridge/auto",params={
