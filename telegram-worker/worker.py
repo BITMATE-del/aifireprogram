@@ -132,15 +132,24 @@ async def deliver_approved(session:ClientSession,connection:Connection,chat_id:i
         return
     job_id=int(job["id"])
     try:
-        # The operator must disclose AI identity in the account/group details.
-        # Send a normal group message, not a reply to a particular member.
+        # Re-check the group state after claiming a send, immediately before Telegram.
+        # A stop or new human message may have invalidated this turn.
+        confirmation=await bridge_json(session,"GET","/api/bridge",params={
+            "accountId":connection.account_id,"chatId":str(chat_id),"verifyJobId":str(job_id)
+        })
+        if not confirmation or not confirmation.get("canSend"):
+            await bridge_json(session,"POST","/api/bridge",json={
+                "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
+                "jobId":job_id,"sent":False,"error":"STALE_OR_STOPPED"
+            })
+            return
         body=str(job["body"])
         message=await connection.client.send_message(chat_id,body)
         await bridge_json(session,"POST","/api/bridge",json={
             "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
             "jobId":job_id,"sent":True,"sentMessageId":message.id
         })
-        log.info("Approved AI reply sent; account=%s job=%s",connection.account_id,job_id)
+        log.info("Telegram conversation turn delivered; account=%s job=%s",connection.account_id,job_id)
     except FloodWaitError as exc:
         await bridge_json(session,"POST","/api/bridge",json={
             "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
@@ -153,7 +162,7 @@ async def deliver_approved(session:ClientSession,connection:Connection,chat_id:i
             "type":"ack","accountId":connection.account_id,"chatId":str(chat_id),
             "jobId":job_id,"sent":False,"error":type(exc).__name__
         })
-        log.warning("Approved reply failed; account=%s job=%s error=%s",
+        log.warning("Conversation turn failed; account=%s job=%s error=%s",
                     connection.account_id,job_id,type(exc).__name__)
 
 
