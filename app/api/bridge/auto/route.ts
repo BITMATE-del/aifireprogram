@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from "next/server";
 import {authorizedBridge,isAllowedGroup,safeAccountId,safeChatId} from "../../../../lib/group-bridge";
 import {autoDb} from "../../../../lib/auto-conversation";
 import {POST as generate} from "../../discussion/route";
+import {eligibleConversationCandidates,selectConversationCandidates} from "../../../../lib/conversation-policy";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -14,13 +15,6 @@ type Inbox={id:string;message_id:string;body:string;observed_at:string};
 type Conversation={id:string;root_inbox_id:string;last_human_inbox_id:string;turn_count:number;last_outbox_id:string|null;status:string;next_decision_at:string};
 type Generated={mode?:string;decision?:string;decisionReason?:string;memorySummary?:string;error?:string;turns?:{speakerId:string;text:string;intent?:string}[]};
 
-function focus(people:Speaker[],topic:string){
- const normalized=topic.toLowerCase();
- return people.map((p,i)=>({
-  p,i,
-  relevance:(p.interests||"").split(/[,，\s]+/).filter(x=>x.length>=2&&normalized.includes(x.toLowerCase())).length,
- })).sort((a,b)=>b.relevance-a.relevance||a.i-b.i).slice(0,16).map(x=>x.p);
-}
 async function audit(db:Awaited<ReturnType<typeof autoDb>>,chatId:string,sessionId:string,step:number,decision:string,reason:string,account?:string){
  await db.query(`INSERT INTO moment_conversation_decisions(chat_id,session_id,turn_step,decision,reason,selected_account)
   VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(session_id,turn_step) DO NOTHING`,
@@ -130,17 +124,14 @@ export async function GET(req:NextRequest){
     AND source_type='auto' AND status IN ('pending','sending','sent') AND created_at>now()-interval '15 minutes'
     GROUP BY account_id`,[chatId]);
   const lastSpoke=new Map(recent.rows.map((x:{account_id:string;last_at:Date})=>[x.account_id,new Date(x.last_at).getTime()]));
-  const candidates=speakers.filter(p=>{
-   if(lastAi?.account_id===p.accountId)return false;
-   const n=lastSpoke.get(p.accountId),min=p.frequency==="quiet"?600000:p.frequency==="active"?90000:180000;
-   return (task==="followup"&&step>=3)||!n||Date.now()-n>=min;
-  });
+  const candidates=eligibleConversationCandidates(speakers,lastSpoke,lastAi?.account_id||null,Date.now(),step);
   if(!candidates.length){
    await audit(db,chatId,session.id,step,"END","발언 가능한 다른 계정이 없거나 휴식 간격 미충족");
    await db.query("UPDATE moment_conversation_sessions SET status='ended',updated_at=now() WHERE id=$1 AND status='deciding'",[session.id]);
    return respond({active:true,decision:"END"});
   }
-  const focusSpeakers=focus(candidates,task==="followup"?(lastAi?.body||candidate.body):candidate.body);
+  const seed=Number(BigInt(candidate.id)%BigInt(2147483647))+step;
+  const focusSpeakers=selectConversationCandidates(candidates,task==="followup"?(lastAi?.body||candidate.body):candidate.body,lastSpoke,seed,16);
   const [memory,prior]=await Promise.all([
    db.query("SELECT summary FROM moment_group_memory WHERE chat_id=$1 AND updated_at>now()-interval '14 days'",[chatId]),
    db.query(`SELECT account_id,body FROM moment_group_outbox WHERE chat_id=$1 AND status='sent'
