@@ -28,10 +28,11 @@ export default function AccountCredentials({accountId}:{accountId:string}){
  const [uploading,setUploading]=useState(false);
  const [importPending,setImportPending]=useState(false);
  const [importMessage,setImportMessage]=useState("");
+ const [fileNotice,setFileNotice]=useState("");
  useEffect(()=>{
   let alive=true;
   setInputs({telegramApiId:"",telegramApiHash:"",telegramSession:"",openaiApiKey:""});
-  setStatus(empty);setSources(none);setNotice("");setLoading(true);setImportPending(false);setImportMessage("");
+  setStatus(empty);setSources(none);setNotice("");setLoading(true);setImportPending(false);setImportMessage("");setFileNotice("");
   fetch("/api/account-credentials?accountId="+encodeURIComponent(accountId),{cache:"no-store"})
    .then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error||"설정 조회 실패");return data})
    .then(data=>{if(alive){setStatus(data.status);setSources(data.sources||none)}})
@@ -61,9 +62,9 @@ export default function AccountCredentials({accountId}:{accountId:string}){
  }
  async function uploadSessionFile(file:File){
   if(uploading||working)return;
-  if(!/\\.(session|txt)$/i.test(file.name)){setNotice(".session 또는 .txt 파일만 선택해 주세요.");return;}
-  if(file.size<85||file.size>512*1024){setNotice("세션 파일은 최대 512KB까지 지원합니다.");return;}
-  setUploading(true);setNotice("");setImportMessage("");
+  if(!/\.(session|txt)$/i.test(file.name)){setFileNotice(".session 또는 .txt 파일을 선택해 주세요.");return;}
+  if(file.size<85||file.size>512*1024){setFileNotice("지원 크기는 85바이트~512KB입니다.");return;}
+  setUploading(true);setNotice("");setImportMessage("");setFileNotice("선택한 파일: "+file.name+" · 등록 중");
   try{
    const payload=new FormData();
    payload.set("accountId",accountId);payload.set("file",file);
@@ -71,9 +72,10 @@ export default function AccountCredentials({accountId}:{accountId:string}){
    const data=await res.json();
    if(!res.ok)throw Error(data.error||"세션 파일 업로드 실패");
    setNotice(data.message||"세션 파일 등록 요청 완료");
+   setFileNotice(data.phase==="connected"?"등록 완료 · 세션 암호화 저장됨":"업로드 완료 · 세션 유효성 확인 중");
    if(data.phase==="connected"){setImportPending(false);await refreshCredentialStatus();}
    else if(data.phase==="pending"){setImportPending(true);setImportMessage("SQLite 세션 파일 변환 중");}
-  }catch(e){setNotice(e instanceof Error?e.message:"세션 파일 등록 실패");setImportPending(false);}
+  }catch(e){setNotice(e instanceof Error?e.message:"세션 파일 등록 실패");setFileNotice("등록 실패: "+(e instanceof Error?e.message:"알 수 없는 오류"));setImportPending(false);}
   finally{setUploading(false);if(fileInput.current)fileInput.current.value="";}
  }
  useEffect(()=>{
@@ -87,11 +89,11 @@ export default function AccountCredentials({accountId}:{accountId:string}){
     if(!active)return;
     if(result.phase==="connected"){
      setImportPending(false);setImportMessage("");
-     setNotice(result.message||"세션 파일 등록이 완료됐습니다.");
+     setNotice(result.message||"세션 파일 등록이 완료됐습니다.");setFileNotice("등록 완료 · 세션 암호화 저장됨");
      await refreshCredentialStatus();
     }else if(result.phase==="error"){
      setImportPending(false);setImportMessage("");
-     setNotice(result.message||"세션 파일을 확인할 수 없습니다.");
+     setNotice(result.message||"세션 파일을 확인할 수 없습니다.");setFileNotice("등록 실패: "+(result.message||"파일 형식 확인 실패"));
     }else{
      setImportMessage(result.phase==="processing"?"SQLite 세션 확인 중":"세션 변환 대기 중");
     }
@@ -127,6 +129,7 @@ export default function AccountCredentials({accountId}:{accountId:string}){
       <button type="button" className="nxSessionFileButton" disabled={uploading||!!working} onClick={()=>fileInput.current?.click()}><Upload size={16}/>{uploading?"업로드 중":"세션 파일 선택"}</button>
       <span>Telethon <b>.session</b> 또는 StringSession <b>.txt</b> · 최대 512KB</span>
       {importPending&&<strong className="nxSessionFileProgress">{importMessage||"세션 변환 중"}</strong>}
+      {fileNotice&&<strong className="nxSessionFileResult" role="status">{fileNotice}</strong>}
     </div>}
     </div>)}</div>
    <div className="nxCredentialTest"><button disabled={testing||loading||sources.openaiApiKey==="none"} onClick={testOpenAi}><Check size={15}/>{testing?"키 확인 중":"저장된 OpenAI API 연결 확인"}</button><span>API 키 유효성만 확인하며 토큰 생성 비용이 발생하지 않는 조회입니다.</span></div>
