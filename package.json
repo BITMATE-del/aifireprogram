@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run test:conversation && next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:conversation": "node scripts/test-conversation.cjs"
   },
   "dependencies": {
     "next": "^15.3.0",
