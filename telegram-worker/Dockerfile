@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY worker.py login_flow.py session_file_import.py test_session_file_import.py ./
-RUN python -m py_compile worker.py login_flow.py session_file_import.py test_session_file_import.py \\\n    && python test_session_file_import.py
+RUN python -m py_compile worker.py login_flow.py session_file_import.py test_session_file_import.py && python test_session_file_import.py
 RUN useradd --create-home --uid 10001 moment
 USER moment
 CMD ["python", "worker.py"]
