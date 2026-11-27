@@ -34,32 +34,38 @@ export async function POST(req:NextRequest){
   payload=JSON.parse(raw);
  }catch{return json({error:"요청 형식 오류"},400)}
  const {accountId,requestId,phase}=payload;
- if(typeof accountId!=="string"||accountId.length>120||typeof requestId!=="string"||
-  !/^[0-9a-f-]{36}$/.test(requestId)||!["connected","error"].includes(String(phase)))return json({error:"작업 정보 오류"},400);
+ // A valid bridge-authenticated worker can report a conversion error even when
+ // the imported file is malformed. Never reject the error report itself.
+ if(typeof accountId!=="string"||accountId.length===0||accountId.length>120||
+    typeof requestId!=="string"||requestId.length===0||requestId.length>120||
+    (phase!=="connected"&&phase!=="error"))return json({error:"작업 정보 오류"},400);
  const success=phase==="connected";
  const session=typeof payload.session==="string"?payload.session:"";
- if(success&&!/^1[A-Za-z0-9_-]{80,7999}$/.test(session))return json({error:"변환된 StringSession이 올바르지 않습니다."},400);
+ if(success&&!/^1[A-Za-z0-9_-]{80,7999}$/.test(session)){
+  payload={...payload,phase:"error",message:"세션 변환 결과가 유효한 StringSession 형식이 아닙니다."};
+ }
+ const finalSuccess=payload.phase==="connected";
  const db=await sessionFileDb(),client=await db.connect();
  try{
   await client.query("BEGIN");
   const found=await client.query(`SELECT phase FROM moment_session_file_imports WHERE account_id=$1 AND request_id=$2
     AND expires_at>now() FOR UPDATE`,[accountId,requestId]);
-  if(!found.rows.length||found.rows[0].phase!=="processing"){
+  if(!found.rows.length||!["processing","pending"].includes(found.rows[0].phase)){
    await client.query("ROLLBACK");return json({error:"작업이 만료되었거나 새 파일로 교체됐습니다."},409);
   }
-  if(success){
+  if(finalSuccess){
    await client.query(`INSERT INTO moment_account_credentials(account_id,telegram_session_encrypted,updated_at)
      VALUES($1,$2,now()) ON CONFLICT(account_id) DO UPDATE SET
      telegram_session_encrypted=EXCLUDED.telegram_session_encrypted,updated_at=now()`,
      [accountId,encryptTransientSecret(session)]);
   }
-  const message=success?"세션 파일 변환 및 암호화 등록 완료. 계정 연결 상태를 확인하세요.":
+  const message=finalSuccess?"세션 파일 변환 및 암호화 등록 완료. 계정 연결 상태를 확인하세요.":
     typeof payload.message==="string"?payload.message.slice(0,160):"세션 파일 형식을 확인할 수 없습니다.";
   await client.query(`UPDATE moment_session_file_imports SET phase=$3,message=$4,
      file_cipher=NULL,updated_at=now() WHERE account_id=$1 AND request_id=$2`,
-     [accountId,requestId,success?"connected":"error",message]);
+     [accountId,requestId,finalSuccess?"connected":"error",message]);
   await client.query("COMMIT");
-  return json({ok:true});
+  return json({ok:true,phase:finalSuccess?"connected":"error",message});
  }catch{
   await client.query("ROLLBACK").catch(()=>{});
   return json({error:"변환된 세션 저장 실패"},503);
