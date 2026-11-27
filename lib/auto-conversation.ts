@@ -28,6 +28,10 @@ export async function autoDb(){
      UNIQUE(chat_id,inbox_id),
      CHECK(status IN ('processing','queued','skipped','failed','cancelled'))
    )`);
+   // Shared Telegram user IDs prevent AI accounts on separate workers from
+   // being mistaken for human authors of a new conversation.
+   await db.query("ALTER TABLE moment_telegram_heartbeats ADD COLUMN IF NOT EXISTS telegram_user_id text");
+   await db.query("CREATE INDEX IF NOT EXISTS moment_connected_ai_user_ids ON moment_telegram_heartbeats(telegram_user_id) WHERE telegram_user_id IS NOT NULL");
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS source_type text NOT NULL DEFAULT 'manual'");
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS not_before timestamptz NOT NULL DEFAULT now()");
    await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS decision_reason text");
