@@ -58,6 +58,14 @@ export async function autoDb(){
    )`);
    await db.query("CREATE UNIQUE INDEX IF NOT EXISTS moment_one_active_session_per_group ON moment_conversation_sessions(chat_id) WHERE status IN ('observing','deciding','waiting','reevaluating')");
    await db.query("CREATE INDEX IF NOT EXISTS moment_session_recent ON moment_conversation_sessions(chat_id,id DESC)");
+   await db.query(`CREATE TABLE IF NOT EXISTS moment_conversation_decisions(
+      id bigserial PRIMARY KEY, chat_id text NOT NULL, session_id bigint NOT NULL,
+      turn_step integer NOT NULL, decision text NOT NULL,
+      reason text NOT NULL DEFAULT '', selected_account text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(session_id,turn_step)
+   )`);
+   await db.query("CREATE INDEX IF NOT EXISTS moment_conversation_decisions_recent ON moment_conversation_decisions(chat_id,id DESC)");
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS conversation_session_id bigint");
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS target_outbox_id bigint");
    await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS turn_intent text");
