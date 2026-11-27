@@ -14,7 +14,19 @@ export async function GET(req:NextRequest){
   const decisions=await db.query(`SELECT decision_type AS type,decision_reason AS reason,
      selected_accounts AS accounts,status,completed_at,claimed_at
      FROM moment_auto_jobs WHERE chat_id=$1 ORDER BY id DESC LIMIT 12`,[chatId]);
-  return reply({...state,decisions:decisions.rows});
+  const [active,latest]=await Promise.all([
+   db.query(`SELECT id::text,status,turn_count,next_decision_at,updated_at
+     FROM moment_conversation_sessions WHERE chat_id=$1
+     AND status IN ('observing','deciding','waiting','reevaluating') ORDER BY id DESC LIMIT 1`,[chatId]),
+   db.query(`SELECT decision AS type,reason,selected_account AS account,status_time AS completed_at FROM (
+     SELECT decision,reason,selected_account,created_at AS status_time
+     FROM moment_conversation_decisions WHERE chat_id=$1 ORDER BY id DESC LIMIT 12
+    ) events`,[chatId])
+  ]);
+  return reply({...state,session:active.rows[0]||null,
+   decisions:latest.rows.length?latest.rows.map((x:{type:string;reason:string;account:string|null;completed_at:Date})=>({
+    type:x.type,reason:x.reason,accounts:x.account?[x.account]:[],status:x.type,claimed_at:x.completed_at,completed_at:x.completed_at
+   })):decisions.rows});
  }
  catch{return reply({error:"운영 상태를 조회하지 못했습니다."},503)}
 }
@@ -53,6 +65,7 @@ export async function POST(req:NextRequest){
     ON CONFLICT(chat_id) DO UPDATE SET enabled=false,updated_at=now()`,[chatId,interval,String(last.rows[0].latest)]);
    await client.query("UPDATE moment_group_outbox SET status='cancelled',completed_at=now(),last_error='운영자가 자동 대화를 정지했습니다.' WHERE chat_id=$1 AND source_type='auto' AND status='pending'",[chatId]);
    await client.query("UPDATE moment_auto_jobs SET status='cancelled',completed_at=now() WHERE chat_id=$1 AND status='processing'",[chatId]);
+   await client.query("UPDATE moment_conversation_sessions SET status='cancelled',updated_at=now() WHERE chat_id=$1 AND status IN ('observing','deciding','waiting','reevaluating')",[chatId]);
   }
   await client.query("COMMIT");
   return reply({ok:true,alreadyRunning:enabled&&previouslyEnabled,...await getAutoStatus(chatId)});
