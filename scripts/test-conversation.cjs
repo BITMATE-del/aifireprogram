@@ -5,9 +5,9 @@ const vm=require("node:vm");
 const ts=require("typescript");
 const source=fs.readFileSync(path.join(__dirname,"..","lib","conversation-policy.ts"),"utf8");
 const {outputText}=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}});
-const exports={};
-vm.runInNewContext(outputText,{exports,require,module:{exports}});
-const {participationCooldownMs,eligibleConversationCandidates,selectConversationCandidates,mayQueueAiTurn,maySendAiTurn,nextTurnAllowed}=exports;
+const exportedFunctions={};
+vm.runInNewContext(outputText,{exports:exportedFunctions,require,module:{exports:exportedFunctions}});
+const {participationCooldownMs,eligibleConversationCandidates,selectConversationCandidates,mayQueueAiTurn,maySendAiTurn,nextTurnAllowed}=exportedFunctions;
 let tests=0;
 function check(label,callback){callback();console.log("PASS",label);tests++;}
 const group=n=>Array.from({length:n},(_,i)=>({accountId:"account_"+String(i+1).padStart(2,"0"),interests:i%3===0?"반도체,삼성전자":"배당주",frequency:i%4===0?"quiet":"balanced"}));
