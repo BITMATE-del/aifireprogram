@@ -212,3 +212,5 @@
 .nxSessionFileUpload>span{font-size:11px;color:#7a9590}
 .nxSessionFileProgress{font-size:11px;color:#157c65}
 @media(max-width:650px){.nxSessionFileButton{width:100%;justify-content:center}}
+
+.nxSessionFileResult{display:block;flex-basis:100%;color:#287761;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
