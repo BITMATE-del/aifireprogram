@@ -11,11 +11,17 @@ export async function GET(req:NextRequest){
   const db=await sessionFileDb(),client=await db.connect();
   try{
    await client.query("BEGIN");
+   await client.query(`UPDATE moment_session_file_imports SET phase='error',
+     message='세션 변환 처리 시간이 초과됐습니다. 파일을 다시 등록해 주세요.',file_cipher=NULL,updated_at=now()
+     WHERE phase IN ('pending','processing') AND expires_at<=now()`);
+   await client.query(`UPDATE moment_session_file_imports SET phase='error',
+     message='세션 변환 결과를 서버에 저장하지 못했습니다. 파일을 다시 등록해 주세요.',file_cipher=NULL,updated_at=now()
+     WHERE phase='processing' AND attempts>=3 AND updated_at<now()-interval '90 seconds'`);
    await client.query(`UPDATE moment_session_file_imports SET phase='pending',updated_at=now()
-     WHERE phase='processing' AND updated_at<now()-interval '90 seconds' AND expires_at>now()`);
-   const r=await client.query(`UPDATE moment_session_file_imports SET phase='processing',updated_at=now()
+     WHERE phase='processing' AND attempts<3 AND updated_at<now()-interval '90 seconds' AND expires_at>now()`);
+   const r=await client.query(`UPDATE moment_session_file_imports SET phase='processing',attempts=attempts+1,updated_at=now()
      WHERE account_id=(SELECT account_id FROM moment_session_file_imports
-      WHERE phase='pending' AND expires_at>now() ORDER BY created_at ASC
+      WHERE phase='pending' AND attempts<3 AND expires_at>now() ORDER BY created_at ASC
       FOR UPDATE SKIP LOCKED LIMIT 1)
      RETURNING account_id,request_id,file_cipher`);
    await client.query("COMMIT");
