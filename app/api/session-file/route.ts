@@ -17,6 +17,16 @@ export async function GET(req:NextRequest){
  if(!validAccount(accountId))return json({error:"계정 ID가 올바르지 않습니다."},400);
  try{
   const db=await sessionFileDb();
+  // Surface a terminal result even if the worker has stopped polling.
+  await db.query(`UPDATE moment_session_file_imports SET phase='error',
+    message='세션 파일 처리가 만료됐습니다. 파일을 다시 등록해 주세요.',
+    file_cipher=NULL,updated_at=now()
+    WHERE account_id=$1 AND phase IN ('pending','processing') AND expires_at<=now()`,[accountId]);
+  await db.query(`UPDATE moment_session_file_imports SET phase='error',
+    message='세션 파일 변환이 반복 실패했습니다. 파일 형식을 확인해 주세요.',
+    file_cipher=NULL,updated_at=now()
+    WHERE account_id=$1 AND phase='processing' AND attempts>=3
+    AND updated_at<now()-interval '90 seconds'`,[accountId]);
   const result=await db.query("SELECT phase,message,expires_at FROM moment_session_file_imports WHERE account_id=$1",[accountId]);
   const task=result.rows[0];
   if(!task)return json({phase:"idle"});
