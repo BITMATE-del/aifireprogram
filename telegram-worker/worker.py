@@ -180,13 +180,30 @@ async def run():
                     next_refresh=now+REFRESH_SECONDS
                     if not connections:
                         log.info("No active Telegram account yet. Configure credentials in the admin site.")
-                for connection in list(connections.values()):
-                    for chat_id in list(connection.chat_ids):
+                # One coordinator per group, but every connected account can send
+                # its own already-approved outbox messages. Bounded concurrency
+                # keeps 10-50 accounts responsive without hammering the server.
+                coordinator={}
+                for item in connections.values():
+                    for gid in item.chat_ids:
+                        if gid not in coordinator or item.account_id<coordinator[gid]:
+                            coordinator[gid]=item.account_id
+                semaphore=asyncio.Semaphore(12)
+                async def process_group(connection,chat_id):
+                    async with semaphore:
                         await bridge_json(session,"POST","/api/bridge",json={
                             "type":"heartbeat","accountId":connection.account_id,"chatId":str(chat_id)
                         })
-                        await bridge_json(session,"GET","/api/bridge/auto",params={"accountId":connection.account_id,"chatId":str(chat_id)})
+                        if coordinator.get(chat_id)==connection.account_id:
+                            await bridge_json(session,"GET","/api/bridge/auto",params={
+                                "accountId":connection.account_id,"chatId":str(chat_id)
+                            })
                         await deliver_approved(session,connection,chat_id)
+                tasks=[process_group(connection,chat_id)
+                       for connection in list(connections.values())
+                       for chat_id in list(connection.chat_ids)]
+                if tasks:
+                    await asyncio.gather(*tasks,return_exceptions=False)
             except Exception as exc:
                 log.warning("Worker cycle error: %s",type(exc).__name__)
             await asyncio.sleep(POLL_SECONDS)
