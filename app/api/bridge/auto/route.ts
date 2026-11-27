@@ -133,7 +133,7 @@ export async function GET(req:NextRequest){
   const candidates=speakers.filter(p=>{
    if(lastAi?.account_id===p.accountId)return false;
    const n=lastSpoke.get(p.accountId),min=p.frequency==="quiet"?600000:p.frequency==="active"?90000:180000;
-   return !n||Date.now()-n>=min;
+   return (task==="followup"&&step>=3)||!n||Date.now()-n>=min;
   });
   if(!candidates.length){
    await audit(db,chatId,session.id,step,"END","발언 가능한 다른 계정이 없거나 휴식 간격 미충족");
