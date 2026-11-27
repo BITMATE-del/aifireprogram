@@ -214,3 +214,22 @@
 @media(max-width:650px){.nxSessionFileButton{width:100%;justify-content:center}}
 
 .nxSessionFileResult{display:block;flex-basis:100%;color:#287761;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+
+/* Telegram account self-management */
+.nxTelegramAccountManage{padding:17px 0;border-top:1px solid var(--nx-line);margin-top:18px}
+.nxTelegramAccountManage .nxCredentialHead{margin-bottom:16px}
+.nxTelegramActionGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.nxTelegramAction{border:1px solid #e0e9e7;border-radius:10px;padding:14px;background:#fafffc;display:flex;flex-direction:column;gap:11px;min-width:0}
+.nxTelegramAction>strong{display:flex;gap:7px;align-items:center;font-size:12px}
+.nxTelegramAction input{width:100%;min-width:0;border:1px solid #dce6e3;border-radius:7px;padding:9px 10px;color:#264a47;background:white;font-size:12px}
+.nxTelegramAction input[type=file]{padding:7px;font-size:11px}
+.nxTelegramAction>button{border:1px solid #b2dacb;background:#e8f6ef;color:#166e5d;padding:9px 12px;border-radius:7px;font-weight:700;margin-top:auto}
+.nxTelegramAction>button:disabled{opacity:.45;cursor:not-allowed}
+.nxTelegramNameFields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}
+.nxTelegramActionLog{margin-top:16px;padding:13px 15px;border:1px solid #e0e9e7;border-radius:10px}
+.nxAccountActionHeader{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.nxAccountActionHeader button{display:flex;align-items:center;gap:5px;color:#58756c;font-size:11px}
+.nxAccountActionRow{display:grid;grid-template-columns:90px 60px 1fr;align-items:center;gap:9px;border-top:1px solid #edf1ef;padding:9px 0;font-size:11px;margin-top:6px}
+.nxAccountActionRow small{color:#748981;overflow-wrap:anywhere}.nxAccountActionRow span.ok{color:#13826d}.nxAccountActionRow span.fail{color:#af5046}
+@media(max-width:1150px){.nxTelegramActionGrid{grid-template-columns:1fr}}
+@media(max-width:650px){.nxAccountActionRow{grid-template-columns:85px 1fr}.nxAccountActionRow small{grid-column:1 / -1}}
