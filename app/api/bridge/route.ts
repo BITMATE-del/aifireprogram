@@ -16,7 +16,7 @@ export async function POST(req:NextRequest){
   if(type==="heartbeat"){
    const accountId=safeAccountId(body.accountId);
    if(!accountId)return reply({error:"계정 ID 오류"},400);
-   const telegramUserId=typeof body.userId==="string"&&/^\\d{1,20}$/.test(body.userId)?body.userId:null;
+   const telegramUserId=typeof body.userId==="string"&&/^\d{1,20}$/.test(body.userId)?body.userId:null;
    await db.query(`INSERT INTO moment_telegram_heartbeats(account_id,chat_id,telegram_user_id,last_seen)
      VALUES($1,$2,$3,now()) ON CONFLICT (account_id,chat_id) DO UPDATE SET
        last_seen=now(),telegram_user_id=COALESCE(EXCLUDED.telegram_user_id,moment_telegram_heartbeats.telegram_user_id)`,[accountId,chatId,telegramUserId]);
