@@ -17,6 +17,7 @@ export async function sessionFileDb(){
     expires_at timestamptz NOT NULL DEFAULT now()+interval '15 minutes',
     CHECK(phase IN ('pending','processing','connected','error'))
    )`);
+   await db.query("ALTER TABLE moment_session_file_imports ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0");
    await db.query("CREATE INDEX IF NOT EXISTS moment_session_files_pending ON moment_session_file_imports(phase,updated_at)");
   })();
   prepared.catch(()=>{prepared=null});
