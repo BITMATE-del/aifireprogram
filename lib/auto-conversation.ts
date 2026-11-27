@@ -40,6 +40,31 @@ export async function autoDb(){
      summary text NOT NULL DEFAULT '',
      updated_at timestamptz NOT NULL DEFAULT now()
    )`);
+   // One live conversation per group. Prior sessions remain available for auditing.
+   await db.query(`CREATE TABLE IF NOT EXISTS moment_conversation_sessions(
+     id bigserial PRIMARY KEY,
+     chat_id text NOT NULL,
+     root_inbox_id bigint NOT NULL,
+     last_human_inbox_id bigint NOT NULL,
+     status text NOT NULL DEFAULT 'observing',
+     turn_count integer NOT NULL DEFAULT 0,
+     last_outbox_id bigint,
+     next_decision_at timestamptz NOT NULL DEFAULT now(),
+     created_at timestamptz NOT NULL DEFAULT now(),
+     updated_at timestamptz NOT NULL DEFAULT now(),
+     UNIQUE(chat_id,root_inbox_id),
+     CHECK(status IN ('observing','deciding','waiting','reevaluating','ended','cancelled')),
+     CHECK(turn_count BETWEEN 0 AND 3)
+   )`);
+   await db.query("CREATE UNIQUE INDEX IF NOT EXISTS moment_one_active_session_per_group ON moment_conversation_sessions(chat_id) WHERE status IN ('observing','deciding','waiting','reevaluating')");
+   await db.query("CREATE INDEX IF NOT EXISTS moment_session_recent ON moment_conversation_sessions(chat_id,id DESC)");
+   await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS conversation_session_id bigint");
+   await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS target_outbox_id bigint");
+   await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS turn_intent text");
+   await db.query("ALTER TABLE moment_group_outbox ADD COLUMN IF NOT EXISTS turn_step integer");
+   await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS conversation_session_id bigint");
+   await db.query("ALTER TABLE moment_auto_jobs ADD COLUMN IF NOT EXISTS turn_step integer");
+   await db.query("CREATE UNIQUE INDEX IF NOT EXISTS moment_unique_session_step ON moment_group_outbox(conversation_session_id,turn_step) WHERE conversation_session_id IS NOT NULL");
    await db.query("CREATE INDEX IF NOT EXISTS moment_auto_groups_enabled ON moment_auto_groups(enabled)");
   })();
   ready.catch(()=>{ready=null;});
