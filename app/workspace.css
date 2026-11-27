@@ -203,3 +203,12 @@
 .nxDirectorDecision{display:grid;grid-template-columns:85px minmax(0,1fr) auto;gap:10px;align-items:center;border-bottom:1px solid #edf0ee;padding:10px 2px;font-size:11px}
 .nxDirectorDecision strong{color:#237b68}.nxDirectorDecision span{overflow-wrap:anywhere;color:#5d7770}.nxDirectorDecision small{color:#9baaa5;text-align:right}
 @media(max-width:680px){.nxPersonaBehavior{grid-template-columns:1fr}.nxDirectorDecision{grid-template-columns:72px minmax(0,1fr)}.nxDirectorDecision small{grid-column:2;text-align:left}}
+
+/* Telegram session file import – compact, integrated with existing credential form */
+.nxSessionFileUpload{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.nxSessionFileButton{display:flex;align-items:center;gap:8px;border:1px solid #b7ddd0;background:#eef8f3;color:#197961;border-radius:8px;padding:10px 15px;font-weight:700;font-size:12px;cursor:pointer}
+.nxSessionFileButton:hover:not(:disabled){background:#e1f3e9;border-color:#81baa5}
+.nxSessionFileButton:disabled{cursor:wait;opacity:.6}
+.nxSessionFileUpload>span{font-size:11px;color:#7a9590}
+.nxSessionFileProgress{font-size:11px;color:#157c65}
+@media(max-width:650px){.nxSessionFileButton{width:100%;justify-content:center}}
