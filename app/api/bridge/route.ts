@@ -16,8 +16,10 @@ export async function POST(req:NextRequest){
   if(type==="heartbeat"){
    const accountId=safeAccountId(body.accountId);
    if(!accountId)return reply({error:"계정 ID 오류"},400);
-   await db.query(`INSERT INTO moment_telegram_heartbeats(account_id,chat_id,last_seen)
-     VALUES($1,$2,now()) ON CONFLICT (account_id,chat_id) DO UPDATE SET last_seen=now()`,[accountId,chatId]);
+   const telegramUserId=typeof body.userId==="string"&&/^\\d{1,20}$/.test(body.userId)?body.userId:null;
+   await db.query(`INSERT INTO moment_telegram_heartbeats(account_id,chat_id,telegram_user_id,last_seen)
+     VALUES($1,$2,$3,now()) ON CONFLICT (account_id,chat_id) DO UPDATE SET
+       last_seen=now(),telegram_user_id=COALESCE(EXCLUDED.telegram_user_id,moment_telegram_heartbeats.telegram_user_id)`,[accountId,chatId,telegramUserId]);
    return reply({ok:true});
   }
   if(type==="message"){
@@ -26,6 +28,8 @@ export async function POST(req:NextRequest){
    const senderId=String(body.senderId??"").slice(0,100);
    const senderName=String(body.senderName??"").slice(0,100);
    if(!text||!Number.isSafeInteger(messageId)||messageId<=0||!senderId)return reply({error:"잘못된 메시지 정보"},400);
+   const aiSender=await db.query("SELECT 1 FROM moment_telegram_heartbeats WHERE telegram_user_id=$1 LIMIT 1",[senderId]);
+   if(aiSender.rowCount)return reply({ok:true,inserted:false,reason:"own_ai_account"});
    const result=await db.query(`INSERT INTO moment_group_inbox(chat_id,message_id,sender_id,sender_name,body)
     VALUES($1,$2,$3,$4,$5) ON CONFLICT(chat_id,message_id) DO NOTHING RETURNING id`,[chatId,messageId,senderId,senderName,text]);
    return reply({ok:true,inserted:result.rowCount===1});
