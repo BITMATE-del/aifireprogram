@@ -31,7 +31,7 @@ export async function POST(req:NextRequest){
  let payload:FormData;
  try{payload=await req.formData()}catch{return json({error:"파일 형식을 확인하세요."},400)}
  const accountId=payload.get("accountId"),uploaded=payload.get("file");
- if(!validAccount(accountId)||!(uploaded instanceof File))return json({error:"계정과 세션 파일을 선택하세요."},400);
+ if(typeof accountId!=="string"||!validAccount(accountId)||!(uploaded instanceof File))return json({error:"계정과 세션 파일을 선택하세요."},400);
  if(uploaded.size<85||uploaded.size>maxSessionFileBytes)return json({error:"세션 파일 크기가 올바르지 않습니다. 최대 512KB입니다."},400);
  const filename=uploaded.name.toLowerCase();
  if(!/\.(session|txt)$/.test(filename))return json({error:".session 또는 .txt 파일만 지원합니다."},400);
