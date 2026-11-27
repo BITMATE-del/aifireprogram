@@ -64,7 +64,7 @@ export async function GET(req:NextRequest){
  try{
   const verify=req.nextUrl.searchParams.get("verifyJobId");
   if(verify!==null){
-   if(!/^\\d{1,18}$/.test(verify))return reply({canSend:false},400);
+   if(!/^\d{1,18}$/.test(verify))return reply({canSend:false},400);
    const db=await autoDb();
    const allowed=await db.query(`SELECT o.id FROM moment_group_outbox o
       WHERE o.id=$1::bigint AND o.account_id=$2 AND o.chat_id=$3 AND o.status='sending'
